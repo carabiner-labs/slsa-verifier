@@ -1,5 +1,6 @@
 # SPDX-FileCopyrightText: Copyright 2026 The SLSA Authors
 # SPDX-License-Identifier: Apache-2.0
+---
 track: source
 id: source-control-review-enforced
 title: Source Provenance Declares REVIEW_ENFORCED

@@ -1,5 +1,6 @@
 # SPDX-FileCopyrightText: Copyright 2026 The SLSA Authors
 # SPDX-License-Identifier: Apache-2.0
+---
 track: build
 id: provenance-has-resolved-dependencies
 title: Provenance Records Resolved Dependencies
