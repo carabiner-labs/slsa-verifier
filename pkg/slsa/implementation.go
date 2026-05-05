@@ -145,35 +145,44 @@ func (*defaultImplementation) CheckIdentities(_ context.Context, opts *Verificat
 	return ErrIdentityMismatch
 }
 
-// ResolveCategory routes the statement to a catalog category based on
-// its predicate-type URI: build provenance (any version) → BuildCore;
-// SLSA source provenance → SourceCore.
+// ResolveCategory routes the statement to a catalog category by looking
+// up its predicate type's track in the eval registry and pairing it
+// with the "core" kind. Unknown predicate types error out.
 func (*defaultImplementation) ResolveCategory(stmt attestation.Statement) (controls.Category, error) {
 	pt := string(stmt.GetPredicateType())
-	switch pt {
-	case eval.PredicateProvenanceV01, eval.PredicateProvenanceV02, eval.PredicateProvenanceV1:
-		return controls.BuildCore, nil
-	case eval.PredicateSourceProvenance:
-		return controls.SourceCore, nil
-	default:
+	track := eval.TrackOf(pt)
+	if track == "" {
 		return "", fmt.Errorf("unsupported predicate type %q", pt)
 	}
+	return controls.Category(string(track) + "/core"), nil
 }
 
 func (*defaultImplementation) SelectCoreControls(_ *VerificationOptions, catalog *controls.Catalog, category controls.Category) []*controls.Control {
 	return catalog.Get(category)
 }
 
-func (*defaultImplementation) SelectBuildTypeControls(_ *VerificationOptions, catalog *controls.Catalog, _ attestation.Statement) []*controls.Control {
-	return catalog.Get(controls.BuildType)
+// SelectBuildTypeControls returns the catalog entries under
+// "<track>/buildType" for the statement's track. For source statements
+// the looked-up category ("source/buildType") simply doesn't exist in
+// the catalog, so the layer naturally stays empty without any hardcoded
+// predicate-type list.
+func (*defaultImplementation) SelectBuildTypeControls(_ *VerificationOptions, catalog *controls.Catalog, stmt attestation.Statement) []*controls.Control {
+	track := eval.TrackOf(string(stmt.GetPredicateType()))
+	if track == "" {
+		return nil
+	}
+	return catalog.Get(controls.Category(string(track) + "/buildType"))
 }
 
 func (*defaultImplementation) SelectUserControls(opts *VerificationOptions) []*controls.Control {
 	return opts.UserControls
 }
 
-// RunControls evaluates each control's check whose predicateType matches
-// the statement's. Controls without a matching check are skipped.
+// RunControls evaluates every control in the input list and returns one
+// ControlResult per control. Controls whose checks don't match the
+// statement's predicateType / buildType produce a StatusSkipped result
+// (rather than being dropped) so the caller can render a complete
+// roster.
 func (d *defaultImplementation) RunControls(_ context.Context, opts *VerificationOptions, ctrls []*controls.Control, statement attestation.Statement) ([]*ControlResult, error) {
 	pt := string(statement.GetPredicateType())
 
@@ -186,17 +195,15 @@ func (d *defaultImplementation) RunControls(_ context.Context, opts *Verificatio
 
 	results := make([]*ControlResult, 0, len(ctrls))
 	for _, c := range ctrls {
-		if r := d.evaluateControl(c, pt, buildType, predicate, subjects, opts.Params); r != nil {
-			results = append(results, r)
-		}
+		results = append(results, d.evaluateControl(c, pt, buildType, predicate, subjects, opts.Params))
 	}
 	return results, nil
 }
 
 // evaluateControl runs the first check in the control whose predicateType
 // matches pt and whose buildTypes filter (when set) matches the
-// statement's buildType. Returns nil when no check applies, signalling
-// the caller to skip this control.
+// statement's buildType. Returns a result with StatusSkipped when no
+// check applies, so the caller still sees the control on the roster.
 func (d *defaultImplementation) evaluateControl(
 	c *controls.Control,
 	predicateType, buildType string,
@@ -217,7 +224,7 @@ func (d *defaultImplementation) evaluateControl(
 		break
 	}
 	if match == nil {
-		return nil
+		return &ControlResult{ID: c.ID, Title: c.Title, SLSALevel: c.SLSALevel, Status: StatusSkipped}
 	}
 
 	cr := &ControlResult{ID: c.ID, Title: c.Title, SLSALevel: c.SLSALevel}
@@ -258,10 +265,11 @@ func (*defaultImplementation) ComputeResult(_ *VerificationOptions, coreResults,
 
 	for _, layer := range [][]*ControlResult{coreResults, buildTypeResults, userResults} {
 		for _, cr := range layer {
-			if cr.Status != StatusPass {
-				r.Status = StatusFail
-				break
+			if cr.Status == StatusPass || cr.Status == StatusSkipped {
+				continue
 			}
+			r.Status = StatusFail
+			break
 		}
 		if r.Status == StatusFail {
 			break
@@ -275,9 +283,10 @@ func (*defaultImplementation) ComputeResult(_ *VerificationOptions, coreResults,
 const maxSLSALevel = 4
 
 // computeSLSALevel returns the highest consecutive level (1..maxSLSALevel)
-// for which every core control declaring that level passed. Levels with
-// no declared controls are passed through transparently — they neither
-// raise nor break the chain.
+// for which every applicable core control declaring that level passed.
+// Levels with no declared controls — or where every declared control
+// was skipped — are passed through transparently: they neither raise
+// nor break the chain.
 func computeSLSALevel(coreResults []*ControlResult) int {
 	byLevel := map[int][]*ControlResult{}
 	for _, cr := range coreResults {
@@ -293,12 +302,20 @@ func computeSLSALevel(coreResults []*ControlResult) int {
 		if !ok {
 			continue
 		}
+		applicable := 0
 		allPassed := true
 		for _, cr := range crs {
+			if cr.Status == StatusSkipped {
+				continue
+			}
+			applicable++
 			if cr.Status != StatusPass {
 				allPassed = false
 				break
 			}
+		}
+		if applicable == 0 {
+			continue
 		}
 		if !allPassed {
 			break
