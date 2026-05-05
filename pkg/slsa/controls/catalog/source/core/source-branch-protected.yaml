@@ -1,0 +1,12 @@
+# SPDX-FileCopyrightText: Copyright 2026 Carabiner Systems, Inc
+# SPDX-License-Identifier: Apache-2.0
+id: source-branch-protected
+title: Source Branch Is Protected
+description: |
+  Placeholder source-attestation control. The exact predicateType URI and
+  field path will be locked in once the SLSA Source predicate plumbing
+  lands in a later phase.
+slsaLevel: 2
+checks:
+  - predicateType: https://slsa.dev/source-provenance/v1
+    expression: predicate.protected == true
