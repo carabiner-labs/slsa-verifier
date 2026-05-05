@@ -1,0 +1,15 @@
+# SPDX-FileCopyrightText: Copyright 2026 Carabiner Systems, Inc
+# SPDX-License-Identifier: Apache-2.0
+id: example-test-builder-id
+title: Example Test Builder Identity
+description: |
+  Sample buildType-specific control. Fires only when the build provenance
+  declares the test buildType URI. Used both as documentation of the
+  buildTypes selector and as a fixture for the buildType filtering tests.
+checks:
+  - predicateType: https://slsa.dev/provenance/v1
+    buildTypes:
+      - https://example.com/test/buildType@v1
+    expression: predicate.runDetails.builder.id == params.expected_builder
+    parameters:
+      - expected_builder
