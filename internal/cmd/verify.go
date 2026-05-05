@@ -19,6 +19,7 @@ import (
 type verifyOptions struct {
 	paramOptions
 	signingOptions
+	controlsOptions
 
 	// AttestationPath is the positional argument: path to the attestation
 	// file (plain in-toto statement, DSSE envelope, or Sigstore bundle).
@@ -29,6 +30,7 @@ type verifyOptions struct {
 func (o *verifyOptions) AddFlags(cmd *cobra.Command) {
 	o.paramOptions.AddFlags(cmd)
 	o.signingOptions.AddFlags(cmd)
+	o.controlsOptions.AddFlags(cmd)
 }
 
 // Validate runs every option set's validator.
@@ -36,6 +38,7 @@ func (o *verifyOptions) Validate() error {
 	errs := []error{
 		o.paramOptions.Validate(),
 		o.signingOptions.Validate(),
+		o.controlsOptions.Validate(),
 	}
 	if o.AttestationPath == "" {
 		errs = append(errs, errors.New("attestation path is required"))
@@ -124,6 +127,7 @@ func runVerify(cmd *cobra.Command, opts *verifyOptions) error {
 		stmt,
 		slsa.WithParams(opts.Params),
 		slsa.WithRequireSignatures(opts.RequireSignatures),
+		slsa.WithUserControlList(opts.Controls),
 	)
 	// Signature failures from the verification layer are a verification
 	// outcome (exit 1), not an execution failure (exit 2).
