@@ -1,0 +1,134 @@
+// SPDX-FileCopyrightText: Copyright 2026 Carabiner Systems, Inc
+// SPDX-License-Identifier: Apache-2.0
+
+package slsa
+
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func pass(id string, level int) *ControlResult {
+	return &ControlResult{ID: id, SLSALevel: level, Status: StatusPass}
+}
+
+func fail(id string, level int) *ControlResult {
+	return &ControlResult{ID: id, SLSALevel: level, Status: StatusFail}
+}
+
+func TestComputeResultAllPass(t *testing.T) {
+	t.Parallel()
+
+	impl := &defaultImplementation{}
+	r, err := impl.ComputeResult(
+		nil,
+		[]*ControlResult{pass("a", 1), pass("b", 2)},
+		[]*ControlResult{pass("c", 0)},
+		[]*ControlResult{pass("d", 0)},
+	)
+	require.NoError(t, err)
+	assert.Equal(t, StatusPass, r.Status)
+	assert.Equal(t, 2, r.SLSALevel)
+}
+
+func TestComputeResultCoreFailDropsToPriorLevel(t *testing.T) {
+	t.Parallel()
+
+	impl := &defaultImplementation{}
+	r, err := impl.ComputeResult(
+		nil,
+		[]*ControlResult{pass("a", 1), fail("b", 2)},
+		nil,
+		nil,
+	)
+	require.NoError(t, err)
+	assert.Equal(t, StatusFail, r.Status)
+	assert.Equal(t, 1, r.SLSALevel)
+}
+
+func TestComputeResultLevel1FailReportsLevel0(t *testing.T) {
+	t.Parallel()
+
+	impl := &defaultImplementation{}
+	r, err := impl.ComputeResult(
+		nil,
+		[]*ControlResult{fail("a", 1)},
+		nil,
+		nil,
+	)
+	require.NoError(t, err)
+	assert.Equal(t, StatusFail, r.Status)
+	assert.Equal(t, 0, r.SLSALevel)
+}
+
+func TestComputeResultEmptyLevelsAreSkipped(t *testing.T) {
+	t.Parallel()
+
+	impl := &defaultImplementation{}
+	// Levels 1 and 3 are filled; level 2 is empty. Achievable max is 3.
+	r, err := impl.ComputeResult(
+		nil,
+		[]*ControlResult{pass("a", 1), pass("c", 3)},
+		nil,
+		nil,
+	)
+	require.NoError(t, err)
+	assert.Equal(t, 3, r.SLSALevel)
+}
+
+func TestComputeResultUserFailMakesOverallFail(t *testing.T) {
+	t.Parallel()
+
+	impl := &defaultImplementation{}
+	r, err := impl.ComputeResult(
+		nil,
+		[]*ControlResult{pass("a", 1)},
+		nil,
+		[]*ControlResult{fail("u", 0)},
+	)
+	require.NoError(t, err)
+	assert.Equal(t, StatusFail, r.Status)
+	// Core controls all passed at level 1.
+	assert.Equal(t, 1, r.SLSALevel)
+}
+
+func TestComputeResultBuildTypeFailMakesOverallFail(t *testing.T) {
+	t.Parallel()
+
+	impl := &defaultImplementation{}
+	r, err := impl.ComputeResult(
+		nil,
+		[]*ControlResult{pass("a", 1)},
+		[]*ControlResult{fail("bt", 0)},
+		nil,
+	)
+	require.NoError(t, err)
+	assert.Equal(t, StatusFail, r.Status)
+}
+
+func TestComputeResultErrorTreatedAsFail(t *testing.T) {
+	t.Parallel()
+
+	impl := &defaultImplementation{}
+	r, err := impl.ComputeResult(
+		nil,
+		[]*ControlResult{{ID: "a", SLSALevel: 1, Status: StatusError}},
+		nil,
+		nil,
+	)
+	require.NoError(t, err)
+	assert.Equal(t, StatusFail, r.Status)
+	assert.Equal(t, 0, r.SLSALevel)
+}
+
+func TestComputeResultAllEmpty(t *testing.T) {
+	t.Parallel()
+
+	impl := &defaultImplementation{}
+	r, err := impl.ComputeResult(nil, nil, nil, nil)
+	require.NoError(t, err)
+	assert.Equal(t, StatusPass, r.Status)
+	assert.Equal(t, 0, r.SLSALevel)
+}
