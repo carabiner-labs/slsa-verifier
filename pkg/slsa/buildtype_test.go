@@ -78,7 +78,8 @@ func TestRunControlsBuildTypeFilterSkipsNonMatch(t *testing.T) {
 	opts := &VerificationOptions{Params: map[string]any{"expected_builder": "https://example.com/builder"}}
 	results, err := impl.RunControls(context.Background(), opts, ctrls, stmt)
 	require.NoError(t, err)
-	assert.Empty(t, results, "control with non-matching buildTypes should be skipped")
+	require.Len(t, results, 1)
+	assert.Equal(t, StatusSkipped, results[0].Status)
 }
 
 func TestRunControlsBuildTypeFilterEmptyAppliesToAny(t *testing.T) {
@@ -113,6 +114,30 @@ func TestRunControlsBuildTypeORMatchAcrossList(t *testing.T) {
 	results, err := impl.RunControls(context.Background(), opts, ctrls, stmt)
 	require.NoError(t, err)
 	require.Len(t, results, 1)
+}
+
+func TestSelectBuildTypeControlsBuildStatement(t *testing.T) {
+	t.Parallel()
+
+	impl := newDefaultImpl(t)
+	cat, err := controls.LoadEmbedded()
+	require.NoError(t, err)
+
+	stmt := newProvV1StmtWithBuildType(t, "https://example.com/test/buildType@v1")
+	got := impl.SelectBuildTypeControls(&VerificationOptions{}, cat, stmt)
+	assert.NotEmpty(t, got, "build statement should pull buildType controls")
+}
+
+func TestSelectBuildTypeControlsSourceStatement(t *testing.T) {
+	t.Parallel()
+
+	impl := newDefaultImpl(t)
+	cat, err := controls.LoadEmbedded()
+	require.NoError(t, err)
+
+	stmt := &fakeStmt{pType: attestation.PredicateType(eval.PredicateSourceProvenance)}
+	got := impl.SelectBuildTypeControls(&VerificationOptions{}, cat, stmt)
+	assert.Empty(t, got, "source statement should produce no buildType results")
 }
 
 func TestEmbeddedBuildTypeControlLoaded(t *testing.T) {

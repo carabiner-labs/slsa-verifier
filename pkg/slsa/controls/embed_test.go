@@ -29,9 +29,18 @@ func TestLoadEmbedded(t *testing.T) {
 	}
 	require.NotNil(t, found, "expected to find source-repo-match control")
 	assert.Equal(t, "Source Repository Matches Expected URI", found.Title)
-	require.Len(t, found.Checks, 1)
-	assert.Equal(t, "https://slsa.dev/provenance/v1", found.Checks[0].PredicateType)
-	assert.Contains(t, found.Checks[0].Parameters, "expected_source")
+	// One check per supported build provenance version (v1, v0.2, v0.1).
+	require.Len(t, found.Checks, 3)
+	predicateTypes := make([]string, 0, len(found.Checks))
+	for _, ck := range found.Checks {
+		predicateTypes = append(predicateTypes, ck.PredicateType)
+		assert.Contains(t, ck.Parameters, "expected_source", "every check requires expected_source")
+	}
+	assert.ElementsMatch(t, []string{
+		"https://slsa.dev/provenance/v1",
+		"https://slsa.dev/provenance/v0.2",
+		"https://slsa.dev/provenance/v0.1",
+	}, predicateTypes)
 }
 
 func TestLoadEmbeddedSourceCore(t *testing.T) {
@@ -111,6 +120,7 @@ func TestControlValidate(t *testing.T) {
 			ctrl: Control{
 				ID:    "x",
 				Title: "X",
+				Track: "build",
 				Checks: []Check{{
 					PredicateType: "t",
 					Expression:    "true",
@@ -122,6 +132,7 @@ func TestControlValidate(t *testing.T) {
 			name: "missing id",
 			ctrl: Control{
 				Title: "X",
+				Track: "build",
 				Checks: []Check{{
 					PredicateType: "t",
 					Expression:    "true",
@@ -132,7 +143,20 @@ func TestControlValidate(t *testing.T) {
 		{
 			name: "missing title",
 			ctrl: Control{
-				ID: "x",
+				ID:    "x",
+				Track: "build",
+				Checks: []Check{{
+					PredicateType: "t",
+					Expression:    "true",
+				}},
+			},
+			wantErr: true,
+		},
+		{
+			name: "missing track",
+			ctrl: Control{
+				ID:    "x",
+				Title: "X",
 				Checks: []Check{{
 					PredicateType: "t",
 					Expression:    "true",
@@ -142,7 +166,7 @@ func TestControlValidate(t *testing.T) {
 		},
 		{
 			name:    "no checks",
-			ctrl:    Control{ID: "x", Title: "X"},
+			ctrl:    Control{ID: "x", Title: "X", Track: "build"},
 			wantErr: true,
 		},
 		{
@@ -150,6 +174,7 @@ func TestControlValidate(t *testing.T) {
 			ctrl: Control{
 				ID:    "x",
 				Title: "X",
+				Track: "build",
 				Checks: []Check{{
 					PredicateType: "t",
 				}},
@@ -161,6 +186,7 @@ func TestControlValidate(t *testing.T) {
 			ctrl: Control{
 				ID:    "x",
 				Title: "X",
+				Track: "build",
 				Checks: []Check{{
 					Expression: "true",
 				}},
