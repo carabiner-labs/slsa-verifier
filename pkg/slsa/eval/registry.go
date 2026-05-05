@@ -19,17 +19,47 @@ const (
 	PredicateSourceProvenance = sourceprovenance.SourceProvPredicateType
 )
 
+// Track names a SLSA spec track. Each registered predicate type belongs
+// to exactly one track, and every Control declares the track it
+// targets — load-time validation ensures the two stay in sync.
+type Track string
+
+const (
+	TrackBuild  Track = "build"
+	TrackSource Track = "source"
+)
+
 // PredicateFactory returns an empty proto.Message of the matching predicate type.
 type PredicateFactory func() proto.Message
 
-// registeredPredicates maps predicate-type URIs to their proto factories.
-// The factories are used both to register descriptors with cel.Env and
-// (in later phases) to unmarshal predicate payloads.
-var registeredPredicates = map[string]PredicateFactory{
-	PredicateProvenanceV01:    func() proto.Message { return &provenancev01.Provenance{} },
-	PredicateProvenanceV02:    func() proto.Message { return &provenancev02.Provenance{} },
-	PredicateProvenanceV1:     func() proto.Message { return &provenancev1.Provenance{} },
-	PredicateSourceProvenance: func() proto.Message { return &sourceprovenance.SourceProvenancePred{} },
+// predicateRegistration carries the per-predicate data the verifier
+// needs: which track it belongs to and how to allocate an empty
+// instance for parsing/CEL registration.
+type predicateRegistration struct {
+	Track   Track
+	Factory PredicateFactory
+}
+
+// registeredPredicates maps predicate-type URIs to their track + proto
+// factory. The factories are used to register descriptors with cel.Env
+// and (for the CLI's verify path) to parse predicate payloads.
+var registeredPredicates = map[string]predicateRegistration{
+	PredicateProvenanceV01: {
+		Track:   TrackBuild,
+		Factory: func() proto.Message { return &provenancev01.Provenance{} },
+	},
+	PredicateProvenanceV02: {
+		Track:   TrackBuild,
+		Factory: func() proto.Message { return &provenancev02.Provenance{} },
+	},
+	PredicateProvenanceV1: {
+		Track:   TrackBuild,
+		Factory: func() proto.Message { return &provenancev1.Provenance{} },
+	},
+	PredicateSourceProvenance: {
+		Track:   TrackSource,
+		Factory: func() proto.Message { return &sourceprovenance.SourceProvenancePred{} },
+	},
 }
 
 // IsKnownPredicateType reports whether the given URI matches a SLSA
@@ -37,6 +67,15 @@ var registeredPredicates = map[string]PredicateFactory{
 func IsKnownPredicateType(uri string) bool {
 	_, ok := registeredPredicates[uri]
 	return ok
+}
+
+// TrackOf returns the SLSA spec track for a predicate type URI, or the
+// empty string if the URI isn't registered.
+func TrackOf(uri string) Track {
+	if r, ok := registeredPredicates[uri]; ok {
+		return r.Track
+	}
+	return ""
 }
 
 // KnownPredicateTypes returns the list of supported predicate-type URIs.
@@ -51,9 +90,9 @@ func KnownPredicateTypes() []string {
 // NewPredicate returns an empty proto.Message for the given predicate type
 // or false if the type is unknown.
 func NewPredicate(predicateType string) (proto.Message, bool) {
-	f, ok := registeredPredicates[predicateType]
+	r, ok := registeredPredicates[predicateType]
 	if !ok {
 		return nil, false
 	}
-	return f(), true
+	return r.Factory(), true
 }

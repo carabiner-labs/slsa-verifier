@@ -10,10 +10,16 @@ import (
 
 // Control models a single verification control: a labelled bundle of CEL
 // checks, each pinned to a specific predicate type.
+//
+// Track names the SLSA spec track this control targets ("build" or
+// "source"). Every check's predicateType must belong to a predicate
+// type registered under the same track — the load-time cross-validation
+// in the embed loader rejects misclassified controls.
 type Control struct {
 	ID          string  `yaml:"id"`
 	Title       string  `yaml:"title"`
 	Description string  `yaml:"description,omitempty"`
+	Track       string  `yaml:"track"`
 	SLSALevel   int     `yaml:"slsaLevel,omitempty"`
 	Checks      []Check `yaml:"checks"`
 }
@@ -34,7 +40,9 @@ type Check struct {
 	BuildTypes    []string `yaml:"buildTypes,omitempty"`
 }
 
-// Validate checks the control's structural integrity.
+// Validate checks the control's structural integrity. Cross-validation
+// against the eval predicate registry (track ↔ check.predicateType
+// match) lives in the loader so this package can stay leaf-level.
 func (c *Control) Validate() error {
 	var errs []error
 	if c.ID == "" {
@@ -42,6 +50,9 @@ func (c *Control) Validate() error {
 	}
 	if c.Title == "" {
 		errs = append(errs, fmt.Errorf("control %q: title is required", c.ID))
+	}
+	if c.Track == "" {
+		errs = append(errs, fmt.Errorf("control %q: track is required", c.ID))
 	}
 	if len(c.Checks) == 0 {
 		errs = append(errs, fmt.Errorf("control %q: at least one check is required", c.ID))
