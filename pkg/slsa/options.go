@@ -58,6 +58,11 @@ type VerificationOptions struct {
 	// RunUserControls toggles execution of user-supplied controls.
 	RunUserControls bool
 
+	// RequireSignatures, when true, fails verification if the statement
+	// does not carry a verified signature (i.e. it was loaded as plain
+	// in-toto JSON or its envelope failed to verify).
+	RequireSignatures bool
+
 	// UserControls is the list of user-supplied controls evaluated when
 	// RunUserControls is true.
 	UserControls []*controls.Control
@@ -92,6 +97,15 @@ func WithBuildTypeControls(enabled bool) VerificationOption {
 func WithUserControls(enabled bool) VerificationOption {
 	return func(o *VerificationOptions) error {
 		o.RunUserControls = enabled
+		return nil
+	}
+}
+
+// WithRequireSignatures toggles whether the verifier fails when the
+// statement is unsigned or its signature did not verify.
+func WithRequireSignatures(required bool) VerificationOption {
+	return func(o *VerificationOptions) error {
+		o.RequireSignatures = required
 		return nil
 	}
 }
