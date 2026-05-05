@@ -16,6 +16,11 @@ const (
 	// StatusError means the control evaluation produced an error during evaluation
 	// (distinct from a clean false outcome).
 	StatusError Status = "ERROR"
+
+	// StatusSkipped means none of the control's checks applied to the
+	// statement (predicate type or buildTypes mismatch). Skipped
+	// controls do not contribute to PASS/FAIL or SLSA-level computation.
+	StatusSkipped Status = "SKIP"
 )
 
 // ControlResult captures the outcome of evaluating a single control.
