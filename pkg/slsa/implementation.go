@@ -11,6 +11,7 @@ import (
 	"fmt"
 
 	"github.com/carabiner-dev/attestation"
+	sapi "github.com/carabiner-dev/signer/api/v1"
 	intoto "github.com/in-toto/attestation/go/v1"
 	"google.golang.org/protobuf/proto"
 
@@ -20,9 +21,15 @@ import (
 
 var ErrNotImplemented = errors.New("slsa: not implemented")
 
-// ErrSignatureRequired is returned by VerifySignatures when
-// RequireSignatures is set and the statement carries no verified signature.
+// ErrSignatureRequired is returned when the statement carries no verified
+// signature in a context that requires one (RequireSignatures or a
+// non-empty ExpectedSigners list).
 var ErrSignatureRequired = errors.New("slsa: statement is not signed or signature did not verify")
+
+// ErrIdentityMismatch is returned by CheckIdentities when the statement
+// is signed and verified but no expected signer matches the verified
+// identities.
+var ErrIdentityMismatch = errors.New("slsa: verified signer does not match any expected --signer")
 
 // VerifierImplementation is the contract Verifier delegates to. It maps
 // the verification layers described in the project design (signature,
@@ -99,10 +106,42 @@ func (*defaultImplementation) VerifySignatures(_ context.Context, opts *Verifica
 	return nil
 }
 
-// CheckIdentities is currently a no-op. The identity-matching flags will
-// be introduced in a later phase.
-func (*defaultImplementation) CheckIdentities(_ context.Context, _ *VerificationOptions, _ attestation.Statement) error {
-	return nil
+// CheckIdentities matches the verified signer identities recorded on the
+// statement against the caller's ExpectedSigners list. With an empty
+// list it is a no-op, preserving the previous behaviour. With one or
+// more expected identities it requires the statement to carry a verified
+// signature; an unsigned statement returns ErrSignatureRequired and a
+// signed-but-non-matching statement returns ErrIdentityMismatch. OR
+// semantics — any one expected signer matching any verified identity
+// passes.
+func (*defaultImplementation) CheckIdentities(_ context.Context, opts *VerificationOptions, statement attestation.Statement) error {
+	if len(opts.ExpectedSigners) == 0 {
+		return nil
+	}
+
+	v := statement.GetVerification()
+	if v == nil || !v.GetVerified() {
+		return ErrSignatureRequired
+	}
+
+	// The collector attaches *signer/api/v1.Verification on signed
+	// envelopes. Its MatchesIdentity expects a *sapi.Identity, which is
+	// exactly what NewIdentityFromSpec produces.
+	sigVer, ok := v.(*sapi.Verification)
+	if !ok {
+		return fmt.Errorf("verification record is %T, want *signer/api/v1.Verification", v)
+	}
+	sv := sigVer.GetSignature()
+	if sv == nil {
+		return ErrSignatureRequired
+	}
+
+	for _, expected := range opts.ExpectedSigners {
+		if sv.MatchesIdentity(expected) {
+			return nil
+		}
+	}
+	return ErrIdentityMismatch
 }
 
 // ResolveCategory routes the statement to a catalog category based on

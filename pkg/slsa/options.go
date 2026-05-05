@@ -4,6 +4,8 @@
 package slsa
 
 import (
+	sapi "github.com/carabiner-dev/signer/api/v1"
+
 	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/controls"
 )
 
@@ -67,6 +69,12 @@ type VerificationOptions struct {
 	// RunUserControls is true.
 	UserControls []*controls.Control
 
+	// ExpectedSigners is the set of identities the statement may be signed
+	// by. When non-empty, CheckIdentities accepts the statement only if at
+	// least one verified signer matches one of these (OR semantics). An
+	// empty list is the default and skips identity matching.
+	ExpectedSigners []*sapi.Identity
+
 	// Params is the parameter map exposed to CEL expressions as `params`.
 	// Values are typically string or []string, matching what the --param
 	// CLI flag produces.
@@ -106,6 +114,26 @@ func WithUserControls(enabled bool) VerificationOption {
 func WithRequireSignatures(required bool) VerificationOption {
 	return func(o *VerificationOptions) error {
 		o.RequireSignatures = required
+		return nil
+	}
+}
+
+// WithExpectedSigner appends an expected signer identity. Calling this
+// option multiple times accumulates entries (OR matched).
+func WithExpectedSigner(id *sapi.Identity) VerificationOption {
+	return func(o *VerificationOptions) error {
+		if id == nil {
+			return nil
+		}
+		o.ExpectedSigners = append(o.ExpectedSigners, id)
+		return nil
+	}
+}
+
+// WithExpectedSigners replaces the expected signer list with ids.
+func WithExpectedSigners(ids []*sapi.Identity) VerificationOption {
+	return func(o *VerificationOptions) error {
+		o.ExpectedSigners = ids
 		return nil
 	}
 }

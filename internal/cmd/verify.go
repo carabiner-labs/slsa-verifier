@@ -127,12 +127,17 @@ func runVerify(cmd *cobra.Command, opts *verifyOptions) error {
 		stmt,
 		slsa.WithParams(opts.Params),
 		slsa.WithRequireSignatures(opts.RequireSignatures),
+		slsa.WithExpectedSigners(opts.Signers),
 		slsa.WithUserControlList(opts.Controls),
 	)
-	// Signature failures from the verification layer are a verification
-	// outcome (exit 1), not an execution failure (exit 2).
+	// Signature / identity failures from the verification layer are a
+	// verification outcome (exit 1), not an execution failure (exit 2).
 	if errors.Is(err, slsa.ErrSignatureRequired) {
 		writef(cmd.OutOrStdout(), "FAIL\n  Signature: %s\n", err)
+		return ErrVerifyFailed
+	}
+	if errors.Is(err, slsa.ErrIdentityMismatch) {
+		writef(cmd.OutOrStdout(), "FAIL\n  Identity: %s\n", err)
 		return ErrVerifyFailed
 	}
 	if err != nil {
