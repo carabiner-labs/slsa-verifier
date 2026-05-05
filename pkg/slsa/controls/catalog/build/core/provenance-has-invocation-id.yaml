@@ -1,0 +1,22 @@
+# SPDX-FileCopyrightText: Copyright 2026 The SLSA Authors
+# SPDX-License-Identifier: Apache-2.0
+track: build
+id: provenance-has-invocation-id
+title: Provenance Records a Build Invocation ID
+description: |
+  Asserts the provenance carries a unique build invocation identifier.
+  Hardened (L3) build platforms typically generate and record one per
+  build for forensic traceability.
+
+  Per-version field paths:
+    - v1.0: predicate.runDetails.metadata.invocationId
+    - v0.2: predicate.metadata.buildInvocationId
+    - v0.1: predicate.metadata.buildInvocationId
+slsaLevel: 3
+checks:
+  - predicateType: https://slsa.dev/provenance/v1
+    expression: predicate.runDetails.metadata.invocationId != ""
+  - predicateType: https://slsa.dev/provenance/v0.2
+    expression: predicate.metadata.buildInvocationId != ""
+  - predicateType: https://slsa.dev/provenance/v0.1
+    expression: predicate.metadata.buildInvocationId != ""

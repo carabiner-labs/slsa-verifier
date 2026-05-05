@@ -1,0 +1,15 @@
+# SPDX-FileCopyrightText: Copyright 2026 The SLSA Authors
+# SPDX-License-Identifier: Apache-2.0
+track: source
+id: source-repo-match
+title: Source Repository Matches Expected URI
+description: |
+  Asserts the SLSA source provenance was produced from the expected
+  repository URI. An identity check at L1 — equivalent to the
+  source-repo-match control on the build side.
+slsaLevel: 1
+checks:
+  - predicateType: https://github.com/slsa-framework/slsa-source-poc/source-provenance/v1-draft
+    expression: predicate.repoUri == params.expected_source_repo
+    parameters:
+      - expected_source_repo

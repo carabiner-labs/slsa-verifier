@@ -1,0 +1,29 @@
+# SPDX-FileCopyrightText: Copyright 2026 The SLSA Authors
+# SPDX-License-Identifier: Apache-2.0
+track: build
+id: builder-id-trusted
+title: Builder Is in the Trusted Builders Allowlist
+description: |
+  Asserts the build provenance was produced by a builder whose URI is in
+  the caller-supplied allowlist. This is the canonical SLSA L2 verifier
+  check — "the build platform that signed the provenance is one we trust
+  to produce sound provenance".
+
+  Per-version field paths:
+    - v1.0: predicate.runDetails.builder.id
+    - v0.2: predicate.builder.id
+    - v0.1: predicate.builder.id
+slsaLevel: 2
+checks:
+  - predicateType: https://slsa.dev/provenance/v1
+    expression: predicate.runDetails.builder.id in params.trusted_builders
+    parameters:
+      - trusted_builders
+  - predicateType: https://slsa.dev/provenance/v0.2
+    expression: predicate.builder.id in params.trusted_builders
+    parameters:
+      - trusted_builders
+  - predicateType: https://slsa.dev/provenance/v0.1
+    expression: predicate.builder.id in params.trusted_builders
+    parameters:
+      - trusted_builders

@@ -1,0 +1,13 @@
+# SPDX-FileCopyrightText: Copyright 2026 The SLSA Authors
+# SPDX-License-Identifier: Apache-2.0
+track: source
+id: source-control-review-enforced
+title: Source Provenance Declares REVIEW_ENFORCED
+description: |
+  Asserts the source provenance lists the REVIEW_ENFORCED control as
+  active. Required for SLSA Source L4 — every change is reviewed by an
+  authenticated human other than the author.
+slsaLevel: 4
+checks:
+  - predicateType: https://github.com/slsa-framework/slsa-source-poc/source-provenance/v1-draft
+    expression: predicate.controls.exists(c, c.name == "REVIEW_ENFORCED")

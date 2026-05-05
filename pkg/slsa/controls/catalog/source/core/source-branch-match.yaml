@@ -1,0 +1,14 @@
+# SPDX-FileCopyrightText: Copyright 2026 The SLSA Authors
+# SPDX-License-Identifier: Apache-2.0
+track: source
+id: source-branch-match
+title: Source Branch Matches Expected Reference
+description: |
+  Asserts the SLSA source provenance targets the expected branch (e.g.
+  `refs/heads/main`). An identity check at L1.
+slsaLevel: 1
+checks:
+  - predicateType: https://github.com/slsa-framework/slsa-source-poc/source-provenance/v1-draft
+    expression: predicate.branch == params.expected_branch
+    parameters:
+      - expected_branch

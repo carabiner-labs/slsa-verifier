@@ -1,0 +1,22 @@
+# SPDX-FileCopyrightText: Copyright 2026 The SLSA Authors
+# SPDX-License-Identifier: Apache-2.0
+track: build
+id: provenance-has-resolved-dependencies
+title: Provenance Records Resolved Dependencies
+description: |
+  Asserts the provenance lists at least one resolved input. Hardened
+  (L3) build platforms typically pin and record the materials they
+  consumed during the build.
+
+  Per-version field paths:
+    - v1.0: predicate.buildDefinition.resolvedDependencies (size > 0)
+    - v0.2: predicate.materials (size > 0)
+    - v0.1: predicate.materials (size > 0)
+slsaLevel: 3
+checks:
+  - predicateType: https://slsa.dev/provenance/v1
+    expression: predicate.buildDefinition.resolvedDependencies.size() > 0
+  - predicateType: https://slsa.dev/provenance/v0.2
+    expression: predicate.materials.size() > 0
+  - predicateType: https://slsa.dev/provenance/v0.1
+    expression: predicate.materials.size() > 0

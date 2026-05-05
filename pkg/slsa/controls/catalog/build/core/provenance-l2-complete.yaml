@@ -1,0 +1,24 @@
+# SPDX-FileCopyrightText: Copyright 2026 The SLSA Authors
+# SPDX-License-Identifier: Apache-2.0
+track: build
+id: provenance-l2-complete
+title: Provenance Has the L2-Required Fields Populated
+description: |
+  Asserts that the L2-required identifying fields (the buildType
+  equivalent and the builder ID) are populated. The proto schema
+  requires these for any conforming provenance, but JSON parsing alone
+  does not enforce protobuf required-field semantics, so this control
+  catches malformed or partial provenance documents.
+
+  Per-version field paths:
+    - v1.0: predicate.buildDefinition.buildType + predicate.runDetails.builder.id
+    - v0.2: predicate.buildType + predicate.builder.id
+    - v0.1: predicate.recipe.type + predicate.builder.id
+slsaLevel: 2
+checks:
+  - predicateType: https://slsa.dev/provenance/v1
+    expression: predicate.buildDefinition.buildType != "" && predicate.runDetails.builder.id != ""
+  - predicateType: https://slsa.dev/provenance/v0.2
+    expression: predicate.buildType != "" && predicate.builder.id != ""
+  - predicateType: https://slsa.dev/provenance/v0.1
+    expression: predicate.recipe.type != "" && predicate.builder.id != ""

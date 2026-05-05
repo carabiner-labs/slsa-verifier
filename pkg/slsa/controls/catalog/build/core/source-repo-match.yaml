@@ -1,13 +1,29 @@
-# SPDX-FileCopyrightText: Copyright 2026 Carabiner Systems, Inc
+# SPDX-FileCopyrightText: Copyright 2026 The SLSA Authors
 # SPDX-License-Identifier: Apache-2.0
+track: build
 id: source-repo-match
 title: Source Repository Matches Expected URI
 description: |
-  Asserts that the build provenance's external source parameter matches the
-  expected source repository URI supplied by the verifier caller.
+  Asserts that the build provenance's source matches the expected source
+  repository URI.
+
+  Per-version field paths:
+    - v1.0: predicate.buildDefinition.externalParameters.source
+    - v0.2: predicate.invocation.configSource.uri
+    - v0.1: any predicate.materials[*].uri matches (v0.1 has no
+      dedicated source-config field, so we accept the URI appearing
+      anywhere in the materials list).
 slsaLevel: 1
 checks:
   - predicateType: https://slsa.dev/provenance/v1
     expression: predicate.buildDefinition.externalParameters.source == params.expected_source
+    parameters:
+      - expected_source
+  - predicateType: https://slsa.dev/provenance/v0.2
+    expression: predicate.invocation.configSource.uri == params.expected_source
+    parameters:
+      - expected_source
+  - predicateType: https://slsa.dev/provenance/v0.1
+    expression: predicate.materials.exists(m, m.uri == params.expected_source)
     parameters:
       - expected_source
