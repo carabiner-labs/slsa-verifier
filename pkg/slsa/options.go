@@ -45,9 +45,13 @@ func WithImplementation(impl VerifierImplementation) Option {
 
 // WithDefaultVerificationOptions sets the verification options that apply
 // to every Verify call unless overridden by per-call VerificationOptions.
-func WithDefaultVerificationOptions(o VerificationOptions) Option {
+// The provided struct is copied; subsequent caller mutations don't affect
+// the verifier.
+func WithDefaultVerificationOptions(o *VerificationOptions) Option {
 	return func(v *Verifier) error {
-		v.defaultVerificationOptions = o
+		if o != nil {
+			v.defaultVerificationOptions = *o
+		}
 		return nil
 	}
 }
@@ -74,6 +78,14 @@ type VerificationOptions struct {
 	// least one verified signer matches one of these (OR semantics). An
 	// empty list is the default and skips identity matching.
 	ExpectedSigners []*sapi.Identity
+
+	// ForceTrack overrides the catalog's predicate-type → track
+	// resolution. Empty means "auto" (the catalog must associate the
+	// predicate type with exactly one track). When set to a track
+	// constant (TrackBuild / TrackSource / etc.), the verifier evaluates
+	// against that track and errors if the catalog does not classify the
+	// predicate type under it.
+	ForceTrack controls.Track
 
 	// Params is the parameter map exposed to CEL expressions as `params`.
 	// Values are typically string or []string, matching what the --param
@@ -134,6 +146,18 @@ func WithExpectedSigner(id *sapi.Identity) VerificationOption {
 func WithExpectedSigners(ids []*sapi.Identity) VerificationOption {
 	return func(o *VerificationOptions) error {
 		o.ExpectedSigners = ids
+		return nil
+	}
+}
+
+// WithTrack forces the verifier to evaluate the statement against the
+// given track regardless of how the catalog classifies the predicate
+// type. The empty value means "auto" — fall back to catalog-driven
+// resolution. Pass controls.TrackBuild or controls.TrackSource (or any
+// future track) explicitly.
+func WithTrack(track controls.Track) VerificationOption {
+	return func(o *VerificationOptions) error {
+		o.ForceTrack = track
 		return nil
 	}
 }

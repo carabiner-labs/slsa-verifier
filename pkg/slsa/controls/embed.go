@@ -40,17 +40,15 @@ const (
 
 // Catalog is a loaded set of controls grouped by category.
 //
-// predicateTracks is the predicate-type → track mapping assembled at
-// load time by walking every control's checks. Each predicate type is
-// associated with whatever track its first encountering control
-// declared; the loader rejects a catalog where the same predicate type
-// appears under more than one track. Future versions will allow
-// multi-track predicates (e.g. a VSA applicable to both build and
-// source) — for now it's a hard error so misclassified controls are
-// caught early.
+// PredicateTracks is the predicate-type → tracks mapping assembled at
+// load time by walking every control's checks. A predicate type may
+// appear under more than one track (e.g. a VSA applicable to both
+// build and source); when that happens, the verifier requires the
+// caller to disambiguate via VerificationOptions.ForceTrack. Exported
+// so tests can construct synthetic catalogs.
 type Catalog struct {
 	Controls        map[Category][]*Control
-	predicateTracks map[string]Track
+	PredicateTracks map[string][]Track
 }
 
 // Get returns the controls registered under the given category. Safe to call
@@ -62,14 +60,23 @@ func (c *Catalog) Get(cat Category) []*Control {
 	return c.Controls[cat]
 }
 
-// TrackOf returns the track associated with the given predicate-type URI
-// in this catalog, or the empty string if the URI is not referenced by
-// any loaded control.
-func (c *Catalog) TrackOf(predicateType string) Track {
+// TracksOf returns the tracks associated with the given predicate-type
+// URI in this catalog. The empty slice means no loaded control references
+// the predicate type. A slice of length > 1 means the predicate type is
+// declared under multiple tracks; callers must use ForceTrack (or the
+// CLI's --track flag) to disambiguate.
+func (c *Catalog) TracksOf(predicateType string) []Track {
 	if c == nil {
-		return ""
+		return nil
 	}
-	return c.predicateTracks[predicateType]
+	return c.PredicateTracks[predicateType]
+}
+
+// BuildPredicateTracks is the exported wrapper used by tests to build a
+// PredicateTracks map from a flat slice of controls. Production code
+// uses the loader, which calls the same logic internally.
+func BuildPredicateTracks(ctrls []*Control) map[string][]Track {
+	return buildPredicateTracks(ctrls)
 }
 
 // LoadEmbedded loads the controls compiled into the binary.
@@ -86,7 +93,7 @@ func LoadEmbedded() (*Catalog, error) {
 func loadFromFS(fsys fs.FS, root string) (*Catalog, error) {
 	cat := &Catalog{
 		Controls:        map[Category][]*Control{},
-		predicateTracks: map[string]Track{},
+		PredicateTracks: map[string][]Track{},
 	}
 
 	walkErr := fs.WalkDir(fsys, root, func(p string, d fs.DirEntry, err error) error {
@@ -124,54 +131,43 @@ func loadFromFS(fsys fs.FS, root string) (*Catalog, error) {
 		return nil, walkErr
 	}
 
-	if err := assemblePredicateTracks(cat); err != nil {
-		return nil, err
-	}
+	cat.PredicateTracks = buildPredicateTracks(flatten(cat.Controls))
 	return cat, nil
 }
 
-// assemblePredicateTracks walks every loaded control and builds the
-// predicate-type → track map on the catalog. A predicate type that
-// surfaces under more than one track is rejected — callers should split
-// their controls or wait for the multi-track relaxation.
-func assemblePredicateTracks(cat *Catalog) error {
-	flat := make([]*Control, 0)
-	for _, byCategory := range cat.Controls {
-		flat = append(flat, byCategory...)
+// flatten returns every control across every category as a single slice.
+func flatten(byCategory map[Category][]*Control) []*Control {
+	out := make([]*Control, 0)
+	for _, group := range byCategory {
+		out = append(out, group...)
 	}
-	tracks, err := buildPredicateTracks(flat)
-	if err != nil {
-		return err
-	}
-	cat.predicateTracks = tracks
-	return nil
+	return out
 }
 
 // buildPredicateTracks walks ctrls and returns the predicate-type →
-// track mapping. Any predicate that appears under more than one track
-// produces an error — multi-track predicates aren't supported yet.
-// Used both for the embedded catalog assembly and for user-supplied
-// control sets loaded via Load.
-func buildPredicateTracks(ctrls []*Control) (map[string]Track, error) {
-	out := map[string]Track{}
-	owners := map[string]string{} // predicate → first control id seen for the existing track
+// tracks map. Same predicate appearing under more than one track is
+// allowed — disambiguation happens later via VerificationOptions.ForceTrack.
+// Used both for the embedded catalog assembly and (in tests) for
+// user-supplied control sets.
+func buildPredicateTracks(ctrls []*Control) map[string][]Track {
+	out := map[string][]Track{}
 	for _, ctrl := range ctrls {
 		track := Track(ctrl.Track)
 		for _, ck := range ctrl.Checks {
-			if existing, seen := out[ck.PredicateType]; seen {
-				if existing != track {
-					return nil, fmt.Errorf(
-						"predicate type %q has conflicting tracks %q (control %q) and %q (control %q) — multi-track predicates are not supported yet",
-						ck.PredicateType, existing, owners[ck.PredicateType], track, ctrl.ID,
-					)
+			tracks := out[ck.PredicateType]
+			already := false
+			for _, t := range tracks {
+				if t == track {
+					already = true
+					break
 				}
-				continue
 			}
-			out[ck.PredicateType] = track
-			owners[ck.PredicateType] = ctrl.ID
+			if !already {
+				out[ck.PredicateType] = append(tracks, track)
+			}
 		}
 	}
-	return out, nil
+	return out
 }
 
 // categoryFromPath returns the directory of file relative to root, used as

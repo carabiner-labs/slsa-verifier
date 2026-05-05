@@ -43,9 +43,6 @@ func loadFile(path string) ([]*Control, error) {
 			return nil, fmt.Errorf("invalid control in %s: %w", path, vErr)
 		}
 	}
-	if _, err := buildPredicateTracks(ctrls); err != nil {
-		return nil, fmt.Errorf("invalid controls in %s: %w", path, err)
-	}
 	return ctrls, nil
 }
 
@@ -70,9 +67,6 @@ func loadDir(root string) ([]*Control, error) {
 	})
 	if walkErr != nil {
 		return nil, walkErr
-	}
-	if _, err := buildPredicateTracks(out); err != nil {
-		return nil, err
 	}
 	return out, nil
 }

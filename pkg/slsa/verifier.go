@@ -77,7 +77,7 @@ func (v *Verifier) Verify(ctx context.Context, statement attestation.Statement, 
 	}
 
 	// Layer 3: predicate routing (build vs source).
-	category, err := v.impl.ResolveCategory(v.Options.Catalog, statement)
+	category, err := v.impl.ResolveCategory(&vopts, v.Options.Catalog, statement)
 	if err != nil {
 		return nil, fmt.Errorf("resolving predicate category: %w", err)
 	}

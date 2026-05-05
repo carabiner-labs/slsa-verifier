@@ -53,8 +53,8 @@ type VerifierImplementation interface {
 
 	// ResolveCategory selects which catalog category to apply by looking
 	// up the statement's predicate-type track in the catalog (layer 3 —
-	// split build vs source).
-	ResolveCategory(catalog *controls.Catalog, statement attestation.Statement) (controls.Category, error)
+	// split build vs source). Honours opts.ForceTrack when set.
+	ResolveCategory(opts *VerificationOptions, catalog *controls.Catalog, statement attestation.Statement) (controls.Category, error)
 
 	// SelectCoreControls chooses the core SLSA controls to evaluate from
 	// the catalog given the resolved category (layer 4).
@@ -146,16 +146,14 @@ func (*defaultImplementation) CheckIdentities(_ context.Context, opts *Verificat
 	return ErrIdentityMismatch
 }
 
-// ResolveCategory routes the statement to a catalog category by asking
-// the catalog which track its predicate type is associated with (the
-// catalog assembles that mapping from the loaded YAML controls). A
-// predicate type that no control references — and therefore has no
-// track — produces an error.
-func (*defaultImplementation) ResolveCategory(catalog *controls.Catalog, stmt attestation.Statement) (controls.Category, error) {
-	pt := string(stmt.GetPredicateType())
-	track := catalog.TrackOf(pt)
-	if track == "" {
-		return "", fmt.Errorf("no controls registered for predicate type %q", pt)
+// ResolveCategory routes the statement to a catalog category. The track
+// resolution honours opts.ForceTrack when set; otherwise the catalog
+// must associate the predicate type with exactly one track, else
+// resolution errors with a "track required" hint.
+func (*defaultImplementation) ResolveCategory(opts *VerificationOptions, catalog *controls.Catalog, stmt attestation.Statement) (controls.Category, error) {
+	track, err := resolveTrack(opts, catalog, stmt)
+	if err != nil {
+		return "", err
 	}
 	return controls.Category(string(track) + "/core"), nil
 }
@@ -165,16 +163,46 @@ func (*defaultImplementation) SelectCoreControls(_ *VerificationOptions, catalog
 }
 
 // SelectBuildTypeControls returns the catalog entries under
-// "<track>/buildType" for the statement's track. For source statements
-// the looked-up category ("source/buildType") simply doesn't exist in
-// the catalog, so the layer naturally stays empty without any hardcoded
-// predicate-type list.
-func (*defaultImplementation) SelectBuildTypeControls(_ *VerificationOptions, catalog *controls.Catalog, stmt attestation.Statement) []*controls.Control {
-	track := catalog.TrackOf(string(stmt.GetPredicateType()))
-	if track == "" {
+// "<track>/buildType" for the statement's resolved track. For source
+// statements the looked-up category ("source/buildType") simply doesn't
+// exist in the catalog, so the layer naturally stays empty.
+func (*defaultImplementation) SelectBuildTypeControls(opts *VerificationOptions, catalog *controls.Catalog, stmt attestation.Statement) []*controls.Control {
+	track, err := resolveTrack(opts, catalog, stmt)
+	if err != nil {
 		return nil
 	}
 	return catalog.Get(controls.Category(string(track) + "/buildType"))
+}
+
+// resolveTrack picks the track to evaluate the statement against. With
+// opts.ForceTrack set, the forced track must be one of the catalog's
+// known tracks for the predicate type, else an error. With ForceTrack
+// empty, the predicate type must be associated with exactly one track
+// in the catalog; multi-track predicates require disambiguation.
+func resolveTrack(opts *VerificationOptions, catalog *controls.Catalog, stmt attestation.Statement) (controls.Track, error) {
+	pt := string(stmt.GetPredicateType())
+	tracks := catalog.TracksOf(pt)
+	if len(tracks) == 0 {
+		return "", fmt.Errorf("no controls registered for predicate type %q", pt)
+	}
+	if opts != nil && opts.ForceTrack != "" {
+		for _, t := range tracks {
+			if t == opts.ForceTrack {
+				return t, nil
+			}
+		}
+		return "", fmt.Errorf(
+			"predicate type %q is not applicable to forced track %q (applicable tracks: %v)",
+			pt, opts.ForceTrack, tracks,
+		)
+	}
+	if len(tracks) > 1 {
+		return "", fmt.Errorf(
+			"predicate type %q is associated with multiple tracks %v — set --track to disambiguate",
+			pt, tracks,
+		)
+	}
+	return tracks[0], nil
 }
 
 func (*defaultImplementation) SelectUserControls(opts *VerificationOptions) []*controls.Control {
