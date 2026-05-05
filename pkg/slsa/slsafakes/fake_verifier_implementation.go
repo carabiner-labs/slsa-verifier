@@ -40,11 +40,12 @@ type FakeVerifierImplementation struct {
 		result1 *slsa.Result
 		result2 error
 	}
-	ResolveCategoryStub        func(*controls.Catalog, attestation.Statement) (controls.Category, error)
+	ResolveCategoryStub        func(*slsa.VerificationOptions, *controls.Catalog, attestation.Statement) (controls.Category, error)
 	resolveCategoryMutex       sync.RWMutex
 	resolveCategoryArgsForCall []struct {
-		arg1 *controls.Catalog
-		arg2 attestation.Statement
+		arg1 *slsa.VerificationOptions
+		arg2 *controls.Catalog
+		arg3 attestation.Statement
 	}
 	resolveCategoryReturns struct {
 		result1 controls.Category
@@ -269,19 +270,20 @@ func (fake *FakeVerifierImplementation) ComputeResultReturnsOnCall(i int, result
 	}{result1, result2}
 }
 
-func (fake *FakeVerifierImplementation) ResolveCategory(arg1 *controls.Catalog, arg2 attestation.Statement) (controls.Category, error) {
+func (fake *FakeVerifierImplementation) ResolveCategory(arg1 *slsa.VerificationOptions, arg2 *controls.Catalog, arg3 attestation.Statement) (controls.Category, error) {
 	fake.resolveCategoryMutex.Lock()
 	ret, specificReturn := fake.resolveCategoryReturnsOnCall[len(fake.resolveCategoryArgsForCall)]
 	fake.resolveCategoryArgsForCall = append(fake.resolveCategoryArgsForCall, struct {
-		arg1 *controls.Catalog
-		arg2 attestation.Statement
-	}{arg1, arg2})
+		arg1 *slsa.VerificationOptions
+		arg2 *controls.Catalog
+		arg3 attestation.Statement
+	}{arg1, arg2, arg3})
 	stub := fake.ResolveCategoryStub
 	fakeReturns := fake.resolveCategoryReturns
-	fake.recordInvocation("ResolveCategory", []interface{}{arg1, arg2})
+	fake.recordInvocation("ResolveCategory", []interface{}{arg1, arg2, arg3})
 	fake.resolveCategoryMutex.Unlock()
 	if stub != nil {
-		return stub(arg1, arg2)
+		return stub(arg1, arg2, arg3)
 	}
 	if specificReturn {
 		return ret.result1, ret.result2
@@ -295,17 +297,17 @@ func (fake *FakeVerifierImplementation) ResolveCategoryCallCount() int {
 	return len(fake.resolveCategoryArgsForCall)
 }
 
-func (fake *FakeVerifierImplementation) ResolveCategoryCalls(stub func(*controls.Catalog, attestation.Statement) (controls.Category, error)) {
+func (fake *FakeVerifierImplementation) ResolveCategoryCalls(stub func(*slsa.VerificationOptions, *controls.Catalog, attestation.Statement) (controls.Category, error)) {
 	fake.resolveCategoryMutex.Lock()
 	defer fake.resolveCategoryMutex.Unlock()
 	fake.ResolveCategoryStub = stub
 }
 
-func (fake *FakeVerifierImplementation) ResolveCategoryArgsForCall(i int) (*controls.Catalog, attestation.Statement) {
+func (fake *FakeVerifierImplementation) ResolveCategoryArgsForCall(i int) (*slsa.VerificationOptions, *controls.Catalog, attestation.Statement) {
 	fake.resolveCategoryMutex.RLock()
 	defer fake.resolveCategoryMutex.RUnlock()
 	argsForCall := fake.resolveCategoryArgsForCall[i]
-	return argsForCall.arg1, argsForCall.arg2
+	return argsForCall.arg1, argsForCall.arg2, argsForCall.arg3
 }
 
 func (fake *FakeVerifierImplementation) ResolveCategoryReturns(result1 controls.Category, result2 error) {

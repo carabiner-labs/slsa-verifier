@@ -169,7 +169,7 @@ func TestVerifyParamsForwarded(t *testing.T) {
 func TestDefaultVerificationOptionsApplied(t *testing.T) {
 	t.Parallel()
 
-	custom := slsa.VerificationOptions{
+	custom := &slsa.VerificationOptions{
 		RunBuildTypeControls: false,
 		RunUserControls:      false,
 		Params:               map[string]any{"k": "v"},

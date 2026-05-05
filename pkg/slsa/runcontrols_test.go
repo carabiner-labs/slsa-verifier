@@ -100,7 +100,7 @@ func TestResolveCategoryBuild(t *testing.T) {
 		eval.PredicateProvenanceV1,
 	} {
 		stmt := &fakeStmt{pType: attestation.PredicateType(pt)}
-		got, rcErr := impl.ResolveCategory(cat, stmt)
+		got, rcErr := impl.ResolveCategory(&VerificationOptions{}, cat, stmt)
 		require.NoError(t, rcErr)
 		assert.Equal(t, controls.BuildCore, got, "predicateType=%s", pt)
 	}
@@ -113,7 +113,7 @@ func TestResolveCategorySource(t *testing.T) {
 	cat, err := controls.LoadEmbedded()
 	require.NoError(t, err)
 	stmt := &fakeStmt{pType: attestation.PredicateType(eval.PredicateSourceProvenance)}
-	got, rcErr := impl.ResolveCategory(cat, stmt)
+	got, rcErr := impl.ResolveCategory(&VerificationOptions{}, cat, stmt)
 	require.NoError(t, rcErr)
 	assert.Equal(t, controls.SourceCore, got)
 }
@@ -125,7 +125,7 @@ func TestResolveCategoryUnknown(t *testing.T) {
 	cat, err := controls.LoadEmbedded()
 	require.NoError(t, err)
 	stmt := &fakeStmt{pType: "https://example.com/unknown"}
-	_, rcErr := impl.ResolveCategory(cat, stmt)
+	_, rcErr := impl.ResolveCategory(&VerificationOptions{}, cat, stmt)
 	assert.Error(t, rcErr)
 }
 
