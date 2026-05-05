@@ -51,9 +51,10 @@ type VerifierImplementation interface {
 	// flags will be added later.
 	CheckIdentities(ctx context.Context, opts *VerificationOptions, statement attestation.Statement) error
 
-	// ResolveCategory selects which catalog category to apply based on the
-	// statement's predicate type (layer 3 — split build vs source).
-	ResolveCategory(statement attestation.Statement) (controls.Category, error)
+	// ResolveCategory selects which catalog category to apply by looking
+	// up the statement's predicate-type track in the catalog (layer 3 —
+	// split build vs source).
+	ResolveCategory(catalog *controls.Catalog, statement attestation.Statement) (controls.Category, error)
 
 	// SelectCoreControls chooses the core SLSA controls to evaluate from
 	// the catalog given the resolved category (layer 4).
@@ -145,14 +146,16 @@ func (*defaultImplementation) CheckIdentities(_ context.Context, opts *Verificat
 	return ErrIdentityMismatch
 }
 
-// ResolveCategory routes the statement to a catalog category by looking
-// up its predicate type's track in the eval registry and pairing it
-// with the "core" kind. Unknown predicate types error out.
-func (*defaultImplementation) ResolveCategory(stmt attestation.Statement) (controls.Category, error) {
+// ResolveCategory routes the statement to a catalog category by asking
+// the catalog which track its predicate type is associated with (the
+// catalog assembles that mapping from the loaded YAML controls). A
+// predicate type that no control references — and therefore has no
+// track — produces an error.
+func (*defaultImplementation) ResolveCategory(catalog *controls.Catalog, stmt attestation.Statement) (controls.Category, error) {
 	pt := string(stmt.GetPredicateType())
-	track := eval.TrackOf(pt)
+	track := catalog.TrackOf(pt)
 	if track == "" {
-		return "", fmt.Errorf("unsupported predicate type %q", pt)
+		return "", fmt.Errorf("no controls registered for predicate type %q", pt)
 	}
 	return controls.Category(string(track) + "/core"), nil
 }
@@ -167,7 +170,7 @@ func (*defaultImplementation) SelectCoreControls(_ *VerificationOptions, catalog
 // the catalog, so the layer naturally stays empty without any hardcoded
 // predicate-type list.
 func (*defaultImplementation) SelectBuildTypeControls(_ *VerificationOptions, catalog *controls.Catalog, stmt attestation.Statement) []*controls.Control {
-	track := eval.TrackOf(string(stmt.GetPredicateType()))
+	track := catalog.TrackOf(string(stmt.GetPredicateType()))
 	if track == "" {
 		return nil
 	}
