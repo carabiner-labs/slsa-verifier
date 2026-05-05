@@ -14,6 +14,8 @@ import (
 	"strings"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/eval"
 )
 
 //go:embed catalog
@@ -85,6 +87,9 @@ func loadFromFS(fsys fs.FS, root string) (*Catalog, error) {
 			if vErr := ctrl.Validate(); vErr != nil {
 				return fmt.Errorf("invalid control in %s: %w", p, vErr)
 			}
+			if vErr := validateTrack(ctrl); vErr != nil {
+				return fmt.Errorf("invalid control in %s: %w", p, vErr)
+			}
 		}
 		cat.Controls[category] = append(cat.Controls[category], ctrls...)
 		return nil
@@ -101,6 +106,32 @@ func categoryFromPath(root, file string) Category {
 	rel := strings.TrimPrefix(file, root)
 	rel = strings.TrimPrefix(rel, "/")
 	return Category(path.Dir(rel))
+}
+
+// validateTrack cross-checks the control's declared track against the
+// track each check's predicateType registers under in the eval package.
+// Mismatches are surfaced as load-time errors so a misclassified YAML
+// (e.g. a source-targeted control under build/core) cannot ship.
+func validateTrack(c *Control) error {
+	track := eval.Track(c.Track)
+	switch track {
+	case eval.TrackBuild, eval.TrackSource:
+	default:
+		return fmt.Errorf("control %q: track must be %q or %q (got %q)",
+			c.ID, eval.TrackBuild, eval.TrackSource, c.Track)
+	}
+	for i, ck := range c.Checks {
+		got := eval.TrackOf(ck.PredicateType)
+		if got == "" {
+			return fmt.Errorf("control %q check #%d: predicateType %q is not a registered SLSA predicate",
+				c.ID, i, ck.PredicateType)
+		}
+		if got != track {
+			return fmt.Errorf("control %q check #%d: predicateType %q belongs to track %q but control declares track %q",
+				c.ID, i, ck.PredicateType, got, track)
+		}
+	}
+	return nil
 }
 
 // parseYAML decodes a multi-document YAML stream into a slice of controls.
