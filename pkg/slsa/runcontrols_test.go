@@ -92,14 +92,16 @@ func TestResolveCategoryBuild(t *testing.T) {
 	t.Parallel()
 
 	impl := newDefaultImpl(t)
+	cat, err := controls.LoadEmbedded()
+	require.NoError(t, err)
 	for _, pt := range []string{
 		eval.PredicateProvenanceV01,
 		eval.PredicateProvenanceV02,
 		eval.PredicateProvenanceV1,
 	} {
 		stmt := &fakeStmt{pType: attestation.PredicateType(pt)}
-		got, err := impl.ResolveCategory(stmt)
-		require.NoError(t, err)
+		got, rcErr := impl.ResolveCategory(cat, stmt)
+		require.NoError(t, rcErr)
 		assert.Equal(t, controls.BuildCore, got, "predicateType=%s", pt)
 	}
 }
@@ -108,9 +110,11 @@ func TestResolveCategorySource(t *testing.T) {
 	t.Parallel()
 
 	impl := newDefaultImpl(t)
-	stmt := &fakeStmt{pType: attestation.PredicateType(eval.PredicateSourceProvenance)}
-	got, err := impl.ResolveCategory(stmt)
+	cat, err := controls.LoadEmbedded()
 	require.NoError(t, err)
+	stmt := &fakeStmt{pType: attestation.PredicateType(eval.PredicateSourceProvenance)}
+	got, rcErr := impl.ResolveCategory(cat, stmt)
+	require.NoError(t, rcErr)
 	assert.Equal(t, controls.SourceCore, got)
 }
 
@@ -118,9 +122,11 @@ func TestResolveCategoryUnknown(t *testing.T) {
 	t.Parallel()
 
 	impl := newDefaultImpl(t)
+	cat, err := controls.LoadEmbedded()
+	require.NoError(t, err)
 	stmt := &fakeStmt{pType: "https://example.com/unknown"}
-	_, err := impl.ResolveCategory(stmt)
-	assert.Error(t, err)
+	_, rcErr := impl.ResolveCategory(cat, stmt)
+	assert.Error(t, rcErr)
 }
 
 func TestRunControlsPass(t *testing.T) {
@@ -212,7 +218,8 @@ func TestRunControlsSkipsControlWithoutMatchingPredicate(t *testing.T) {
 	opts := &VerificationOptions{Params: map[string]any{}}
 	results, err := impl.RunControls(context.Background(), opts, ctrls, stmt)
 	require.NoError(t, err)
-	assert.Empty(t, results)
+	require.Len(t, results, 1)
+	assert.Equal(t, StatusSkipped, results[0].Status)
 }
 
 func TestRunControlsExposesSubjects(t *testing.T) {
