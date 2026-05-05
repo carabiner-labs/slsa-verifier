@@ -24,6 +24,10 @@ type verifyOptions struct {
 	// AttestationPath is the positional argument: path to the attestation
 	// file (plain in-toto statement, DSSE envelope, or Sigstore bundle).
 	AttestationPath string
+
+	// Verbose toggles inclusion of skipped controls and control titles in
+	// the verify summary roster.
+	Verbose bool
 }
 
 // AddFlags registers all option sets on the verify command.
@@ -31,6 +35,10 @@ func (o *verifyOptions) AddFlags(cmd *cobra.Command) {
 	o.paramOptions.AddFlags(cmd)
 	o.signingOptions.AddFlags(cmd)
 	o.controlsOptions.AddFlags(cmd)
+	cmd.PersistentFlags().BoolVarP(
+		&o.Verbose, "verbose", "v", false,
+		"show skipped controls and control titles in the summary",
+	)
 }
 
 // Validate runs every option set's validator.
@@ -144,45 +152,11 @@ func runVerify(cmd *cobra.Command, opts *verifyOptions) error {
 		return fmt.Errorf("running verification: %w", err)
 	}
 
-	printResult(cmd.OutOrStdout(), result)
+	printResult(cmd.OutOrStdout(), result, opts.Verbose)
 	if !result.Pass() {
 		return ErrVerifyFailed
 	}
 	return nil
-}
-
-// printResult writes a minimal pass/fail summary. More elaborate output
-// formats (JSON, VSA, etc.) will be introduced later.
-func printResult(w io.Writer, result *slsa.Result) {
-	if result.Pass() {
-		writef(w, "PASS\n")
-		if result.SLSALevel > 0 {
-			writef(w, "SLSA Level: %d\n", result.SLSALevel)
-		}
-		return
-	}
-
-	writef(w, "FAIL\n")
-	printFailures(w, "Core", result.CoreResults)
-	printFailures(w, "BuildType", result.BuildTypeResults)
-	printFailures(w, "User", result.UserResults)
-}
-
-func printFailures(w io.Writer, label string, results []*slsa.ControlResult) {
-	for _, cr := range results {
-		if cr.Status == slsa.StatusPass {
-			continue
-		}
-		tag := label
-		if cr.SLSALevel > 0 {
-			tag = fmt.Sprintf("%s L%d", label, cr.SLSALevel)
-		}
-		writef(w, "  [%s] %s (%s) — %s", tag, cr.ID, cr.Status, cr.Title)
-		if cr.Message != "" {
-			writef(w, ": %s", cr.Message)
-		}
-		writef(w, "\n")
-	}
 }
 
 // writef wraps Fprintf and discards the result — terminal output failures
