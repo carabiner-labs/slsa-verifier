@@ -1,132 +1,98 @@
 // SPDX-FileCopyrightText: Copyright 2026 Carabiner Systems, Inc
 // SPDX-License-Identifier: Apache-2.0
 
-// Package predicate implements an attestation.Predicate / Statement that
-// only recognises SLSA build (v0.1, v0.2, v1.0) and SLSA source predicate
-// types. The set of recognised types is sourced from the eval package
-// registry so predicate parsing and CEL evaluation stay in lockstep.
+// Package predicate registers SLSA-only attestation.PredicateParser
+// implementations as the collector's global predicate parser registry.
+//
+// Importing this package replaces github.com/carabiner-dev/collector's
+// shipped predicate parser map (which covers SBOMs, VEX, OSV, …) with the
+// SLSA build (v0.1, v0.2, v1.0) and SLSA source predicate types only,
+// using the upstream proto definitions from
+// github.com/in-toto/attestation/go/predicates/provenance and
+// github.com/slsa-framework/source-tool/pkg/provenance.
 package predicate
 
 import (
-	"errors"
 	"fmt"
-	"os"
+	"strings"
 
 	"github.com/carabiner-dev/attestation"
-	intoto "github.com/in-toto/attestation/go/v1"
+	collectorpred "github.com/carabiner-dev/collector/predicate"
+	"github.com/carabiner-dev/collector/predicate/generic"
 	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/proto"
 
 	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/eval"
 )
 
-// ErrUnsupportedPredicate is returned when the statement's predicate
-// type is not one of the SLSA build or source types.
-var ErrUnsupportedPredicate = errors.New("predicate: only SLSA build and source predicate types are supported")
-
-// Predicate is the SLSA-restricted implementation of attestation.Predicate.
-type Predicate struct {
-	Type         attestation.PredicateType
-	Parsed       proto.Message
-	Data         []byte
-	Origin       attestation.Subject
-	Verification attestation.Verification
+// Parser handles a single SLSA predicate type by unmarshalling JSON into
+// the upstream proto message registered for that type in the eval package.
+type Parser struct {
+	predicateType attestation.PredicateType
 }
 
-var _ attestation.Predicate = (*Predicate)(nil)
-
-func (p *Predicate) GetType() attestation.PredicateType { return p.Type }
-
-func (p *Predicate) SetType(t attestation.PredicateType) error {
-	p.Type = t
-	return nil
-}
-
-func (p *Predicate) GetParsed() any                             { return p.Parsed }
-func (p *Predicate) GetData() []byte                            { return p.Data }
-func (p *Predicate) GetOrigin() attestation.Subject             { return p.Origin }
-func (p *Predicate) SetOrigin(s attestation.Subject)            { p.Origin = s }
-func (p *Predicate) GetVerification() attestation.Verification  { return p.Verification }
-func (p *Predicate) SetVerification(v attestation.Verification) { p.Verification = v }
-
-// Statement is the SLSA-restricted implementation of attestation.Statement.
-// It wraps an in-toto v1 Statement plus our typed Predicate.
-type Statement struct {
-	Stmt *intoto.Statement
-	Pred *Predicate
-}
-
-var _ attestation.Statement = (*Statement)(nil)
-
-func (s *Statement) GetSubjects() []attestation.Subject {
-	subs := s.Stmt.GetSubject()
-	out := make([]attestation.Subject, len(subs))
-	for i, sub := range subs {
-		out[i] = sub
+// NewParser returns a Parser for the given SLSA predicate type. The type
+// must be registered in the eval package; otherwise NewParser returns nil
+// and false.
+func NewParser(predicateType attestation.PredicateType) (*Parser, bool) {
+	if !eval.IsKnownPredicateType(string(predicateType)) {
+		return nil, false
 	}
-	return out
+	return &Parser{predicateType: predicateType}, true
 }
 
-func (s *Statement) GetPredicate() attestation.Predicate         { return s.Pred }
-func (s *Statement) GetPredicateType() attestation.PredicateType { return s.Pred.GetType() }
-func (s *Statement) GetType() string                             { return s.Stmt.GetType() }
-func (s *Statement) GetVerification() attestation.Verification {
-	if s.Pred == nil {
-		return nil
-	}
-	return s.Pred.Verification
-}
-
-// ParsePredicate parses raw predicate JSON for the given predicate type.
-// Returns ErrUnsupportedPredicate if the type isn't a SLSA build or source
-// type registered in the eval package.
-func ParsePredicate(predicateType attestation.PredicateType, data []byte) (*Predicate, error) {
-	msg, ok := eval.NewPredicate(string(predicateType))
-	if !ok {
-		return nil, fmt.Errorf("%w: %s", ErrUnsupportedPredicate, predicateType)
-	}
+// Parse unmarshals data into the proto message backing this parser's
+// predicate type and wraps it in a generic.Predicate so the collector can
+// thread it through statements and envelopes.
+func (p *Parser) Parse(data []byte) (attestation.Predicate, error) {
+	msg, _ := eval.NewPredicate(string(p.predicateType))
 	if err := protojson.Unmarshal(data, msg); err != nil {
-		return nil, fmt.Errorf("unmarshalling predicate JSON: %w", err)
+		if isWrongFormat(err) {
+			return nil, attestation.ErrNotCorrectFormat
+		}
+		return nil, fmt.Errorf("parsing %s predicate: %w", p.predicateType, err)
 	}
-	return &Predicate{
-		Type:   predicateType,
+	return &generic.Predicate{
+		Type:   p.predicateType,
 		Parsed: msg,
 		Data:   data,
 	}, nil
 }
 
-// ParseStatement parses a plain in-toto JSON Statement payload and returns
-// a Statement with the predicate parsed into the matching SLSA proto type.
-// Returns ErrUnsupportedPredicate if the predicateType isn't a SLSA build
-// or source type.
-func ParseStatement(data []byte) (*Statement, error) {
-	istmt := &intoto.Statement{}
-	if err := protojson.Unmarshal(data, istmt); err != nil {
-		return nil, fmt.Errorf("unmarshalling statement: %w", err)
+// SupportsType reports whether this parser handles any of types.
+func (p *Parser) SupportsType(types ...attestation.PredicateType) bool {
+	for _, t := range types {
+		if t == p.predicateType {
+			return true
+		}
 	}
-	pt := istmt.GetPredicateType()
-	if pt == "" {
-		return nil, errors.New("statement has empty predicateType")
-	}
-
-	predBytes, err := protojson.Marshal(istmt.GetPredicate())
-	if err != nil {
-		return nil, fmt.Errorf("marshalling inner predicate: %w", err)
-	}
-	pred, err := ParsePredicate(attestation.PredicateType(pt), predBytes)
-	if err != nil {
-		return nil, err
-	}
-	return &Statement{Stmt: istmt, Pred: pred}, nil
+	return false
 }
 
-// LoadStatement reads a plain in-toto JSON Statement from path and parses
-// it. DSSE envelopes and Sigstore bundles are rejected at this layer; a
-// later phase will add envelope detection in front of this call.
-func LoadStatement(path string) (*Statement, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("reading attestation file: %w", err)
+// isWrongFormat translates protojson "doesn't match this proto" errors
+// into the collector's ErrNotCorrectFormat sentinel so its parser dispatch
+// keeps trying the remaining parsers instead of bubbling up.
+func isWrongFormat(err error) bool {
+	s := err.Error()
+	return strings.Contains(s, "syntax error") ||
+		strings.Contains(s, "unknown field") ||
+		strings.Contains(s, "invalid value")
+}
+
+// Parsers is the SLSA-only predicate parser registry — one Parser per
+// predicate type known to the eval package.
+var Parsers = func() collectorpred.ParsersList {
+	out := collectorpred.ParsersList{}
+	for _, pt := range eval.KnownPredicateTypes() {
+		p, _ := NewParser(attestation.PredicateType(pt))
+		out[attestation.PredicateType(pt)] = p
 	}
-	return ParseStatement(data)
+	return out
+}()
+
+// init replaces the collector's global predicate parser registry with the
+// SLSA-only set above. After this package is imported (directly or
+// transitively), envelope.Parsers and statement.Parsers parse predicates
+// through this package only.
+func init() {
+	collectorpred.Parsers = Parsers
 }

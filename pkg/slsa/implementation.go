@@ -20,6 +20,10 @@ import (
 
 var ErrNotImplemented = errors.New("slsa: not implemented")
 
+// ErrSignatureRequired is returned by VerifySignatures when
+// RequireSignatures is set and the statement carries no verified signature.
+var ErrSignatureRequired = errors.New("slsa: statement is not signed or signature did not verify")
+
 // VerifierImplementation is the contract Verifier delegates to. It maps
 // the verification layers described in the project design (signature,
 // identity, predicate routing, control selection, control evaluation,
@@ -80,10 +84,18 @@ func newDefaultImplementation() (*defaultImplementation, error) {
 	return &defaultImplementation{evaluator: ev}, nil
 }
 
-// VerifySignatures is currently a no-op: the plain in-toto JSON loader
-// produced statements have no envelope to verify. DSSE / Sigstore bundle
-// support and real signature verification land in a later phase.
-func (*defaultImplementation) VerifySignatures(_ context.Context, _ *VerificationOptions, _ attestation.Statement) error {
+// VerifySignatures inspects the Verification record attached to the
+// statement by the loader. If RequireSignatures is set in opts, the
+// statement must carry a verified signature; otherwise the layer is a
+// pass-through that allows both signed and unsigned input.
+func (*defaultImplementation) VerifySignatures(_ context.Context, opts *VerificationOptions, statement attestation.Statement) error {
+	if !opts.RequireSignatures {
+		return nil
+	}
+	v := statement.GetVerification()
+	if v == nil || !v.GetVerified() {
+		return ErrSignatureRequired
+	}
 	return nil
 }
 

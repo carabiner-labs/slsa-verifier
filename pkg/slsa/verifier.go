@@ -10,6 +10,10 @@ import (
 	"github.com/carabiner-dev/attestation"
 
 	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/controls"
+	// Imported for its init: registers the SLSA-only predicate parsers as
+	// the collector's global registry so envelope/statement parsing only
+	// recognises SLSA build and source predicate types.
+	_ "github.com/carabiner-labs/slsa-verifier/pkg/slsa/predicate"
 )
 
 // Verifier is the SLSA attestation verifier. It orchestrates the layered
