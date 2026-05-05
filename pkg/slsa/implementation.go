@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/carabiner-dev/attestation"
 	sapi "github.com/carabiner-dev/signer/api/v1"
@@ -181,32 +182,39 @@ func (d *defaultImplementation) RunControls(_ context.Context, opts *Verificatio
 		return nil, fmt.Errorf("extracting predicate from statement: %w", err)
 	}
 	subjects := convertSubjects(statement.GetSubjects())
+	buildType := eval.BuildTypeOf(predicate)
 
 	results := make([]*ControlResult, 0, len(ctrls))
 	for _, c := range ctrls {
-		if r := d.evaluateControl(c, pt, predicate, subjects, opts.Params); r != nil {
+		if r := d.evaluateControl(c, pt, buildType, predicate, subjects, opts.Params); r != nil {
 			results = append(results, r)
 		}
 	}
 	return results, nil
 }
 
-// evaluateControl runs the first check in the control whose predicate
-// type matches pt. Returns nil when no check applies, signalling the
-// caller to skip this control.
+// evaluateControl runs the first check in the control whose predicateType
+// matches pt and whose buildTypes filter (when set) matches the
+// statement's buildType. Returns nil when no check applies, signalling
+// the caller to skip this control.
 func (d *defaultImplementation) evaluateControl(
 	c *controls.Control,
-	predicateType string,
+	predicateType, buildType string,
 	predicate proto.Message,
 	subjects []*intoto.ResourceDescriptor,
 	params map[string]any,
 ) *ControlResult {
 	var match *controls.Check
 	for i := range c.Checks {
-		if c.Checks[i].PredicateType == predicateType {
-			match = &c.Checks[i]
-			break
+		ck := &c.Checks[i]
+		if ck.PredicateType != predicateType {
+			continue
 		}
+		if len(ck.BuildTypes) > 0 && !slices.Contains(ck.BuildTypes, buildType) {
+			continue
+		}
+		match = ck
+		break
 	}
 	if match == nil {
 		return nil
