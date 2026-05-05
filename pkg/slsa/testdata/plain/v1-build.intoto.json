@@ -1,0 +1,25 @@
+{
+  "_type": "https://in-toto.io/Statement/v1",
+  "subject": [
+    {"name": "out/binary", "digest": {"sha256": "deadbeef"}}
+  ],
+  "predicateType": "https://slsa.dev/provenance/v1",
+  "predicate": {
+    "buildDefinition": {
+      "buildType": "https://example.com/buildType@v1",
+      "externalParameters": {
+        "source": "git+https://example.com/repo"
+      },
+      "resolvedDependencies": [
+        {"uri": "git+https://example.com/dep", "digest": {"sha256": "aaaa"}}
+      ]
+    },
+    "runDetails": {
+      "builder": {"id": "https://example.com/builder"},
+      "metadata": {
+        "invocationId": "build-1234",
+        "startedOn": "2026-01-01T00:00:00Z"
+      }
+    }
+  }
+}

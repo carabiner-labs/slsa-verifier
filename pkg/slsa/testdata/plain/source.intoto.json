@@ -1,0 +1,21 @@
+{
+  "_type": "https://in-toto.io/Statement/v1",
+  "subject": [
+    {"digest": {"gitCommit": "abcdef0123456789"}}
+  ],
+  "predicateType": "https://github.com/slsa-framework/slsa-source-poc/source-provenance/v1-draft",
+  "predicate": {
+    "repo_uri": "https://github.com/example/repo",
+    "branch": "refs/heads/main",
+    "prev_commit": "0000000000000000",
+    "activity_type": "push",
+    "actor": "alice",
+    "created_on": "2026-01-01T00:00:00Z",
+    "controls": [
+      {"name": "CONTINUITY_ENFORCED", "since": "2025-01-01T00:00:00Z"},
+      {"name": "TAG_HYGIENE", "since": "2025-01-01T00:00:00Z"},
+      {"name": "PROVENANCE_AVAILABLE", "since": "2025-01-01T00:00:00Z"},
+      {"name": "REVIEW_ENFORCED", "since": "2025-01-01T00:00:00Z"}
+    ]
+  }
+}
