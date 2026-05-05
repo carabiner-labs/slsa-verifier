@@ -8,14 +8,16 @@ package slsa
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/carabiner-dev/attestation"
+	intoto "github.com/in-toto/attestation/go/v1"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/controls"
+	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/eval"
 )
 
-// ErrNotImplemented is returned by stub implementation methods until a
-// later phase fills them in.
 var ErrNotImplemented = errors.New("slsa: not implemented")
 
 // VerifierImplementation is the contract Verifier delegates to. It maps
@@ -61,10 +63,22 @@ type VerifierImplementation interface {
 	ComputeResult(opts *VerificationOptions, coreResults, buildTypeResults, userResults []*ControlResult) (*Result, error)
 }
 
-// defaultImplementation is the production verifierImplementation. Each
-// method is a stub returning empty results until later phases land the
-// real signing, CEL, and result-computation logic.
-type defaultImplementation struct{}
+// defaultImplementation is the production VerifierImplementation.
+// Predicate routing and control evaluation are wired to the
+// registry and CEL evaluator in the eval package.
+type defaultImplementation struct {
+	evaluator *eval.Evaluator
+}
+
+// newDefaultImplementation constructs a defaultImplementation with a
+// fresh CEL evaluator.
+func newDefaultImplementation() (*defaultImplementation, error) {
+	ev, err := eval.NewEvaluator()
+	if err != nil {
+		return nil, fmt.Errorf("building CEL evaluator: %w", err)
+	}
+	return &defaultImplementation{evaluator: ev}, nil
+}
 
 func (*defaultImplementation) VerifySignatures(_ context.Context, _ *VerificationOptions, _ attestation.Statement) error {
 	return ErrNotImplemented
@@ -74,8 +88,19 @@ func (*defaultImplementation) CheckIdentities(_ context.Context, _ *Verification
 	return ErrNotImplemented
 }
 
-func (*defaultImplementation) ResolveCategory(_ attestation.Statement) (controls.Category, error) {
-	return "", ErrNotImplemented
+// ResolveCategory routes the statement to a catalog category based on
+// its predicate-type URI: build provenance (any version) → BuildCore;
+// SLSA source provenance → SourceCore.
+func (*defaultImplementation) ResolveCategory(stmt attestation.Statement) (controls.Category, error) {
+	pt := string(stmt.GetPredicateType())
+	switch pt {
+	case eval.PredicateProvenanceV01, eval.PredicateProvenanceV02, eval.PredicateProvenanceV1:
+		return controls.BuildCore, nil
+	case eval.PredicateSourceProvenance:
+		return controls.SourceCore, nil
+	default:
+		return "", fmt.Errorf("unsupported predicate type %q", pt)
+	}
 }
 
 func (*defaultImplementation) SelectCoreControls(_ *VerificationOptions, catalog *controls.Catalog, category controls.Category) []*controls.Control {
@@ -90,10 +115,104 @@ func (*defaultImplementation) SelectUserControls(opts *VerificationOptions) []*c
 	return opts.UserControls
 }
 
-func (*defaultImplementation) RunControls(_ context.Context, _ *VerificationOptions, _ []*controls.Control, _ attestation.Statement) ([]*ControlResult, error) {
-	return nil, ErrNotImplemented
+// RunControls evaluates each control's check whose predicateType matches
+// the statement's. Controls without a matching check are skipped.
+func (d *defaultImplementation) RunControls(_ context.Context, opts *VerificationOptions, ctrls []*controls.Control, statement attestation.Statement) ([]*ControlResult, error) {
+	pt := string(statement.GetPredicateType())
+
+	predicate, err := extractPredicate(statement)
+	if err != nil {
+		return nil, fmt.Errorf("extracting predicate from statement: %w", err)
+	}
+	subjects := convertSubjects(statement.GetSubjects())
+
+	results := make([]*ControlResult, 0, len(ctrls))
+	for _, c := range ctrls {
+		if r := d.evaluateControl(c, pt, predicate, subjects, opts.Params); r != nil {
+			results = append(results, r)
+		}
+	}
+	return results, nil
+}
+
+// evaluateControl runs the first check in the control whose predicate
+// type matches pt. Returns nil when no check applies, signalling the
+// caller to skip this control.
+func (d *defaultImplementation) evaluateControl(
+	c *controls.Control,
+	predicateType string,
+	predicate proto.Message,
+	subjects []*intoto.ResourceDescriptor,
+	params map[string]any,
+) *ControlResult {
+	var match *controls.Check
+	for i := range c.Checks {
+		if c.Checks[i].PredicateType == predicateType {
+			match = &c.Checks[i]
+			break
+		}
+	}
+	if match == nil {
+		return nil
+	}
+
+	cr := &ControlResult{ID: c.ID, Title: c.Title}
+	for _, p := range match.Parameters {
+		if _, ok := params[p]; !ok {
+			cr.Status = StatusError
+			cr.Message = fmt.Sprintf("missing required param %q", p)
+			return cr
+		}
+	}
+
+	pass, err := d.evaluator.Evaluate(predicateType, match.Expression, predicate, subjects, params)
+	switch {
+	case err != nil:
+		cr.Status = StatusError
+		cr.Message = err.Error()
+	case pass:
+		cr.Status = StatusPass
+	default:
+		cr.Status = StatusFail
+	}
+	return cr
 }
 
 func (*defaultImplementation) ComputeResult(_ *VerificationOptions, _, _, _ []*ControlResult) (*Result, error) {
 	return nil, ErrNotImplemented
+}
+
+// extractPredicate returns the parsed proto message carried by the
+// statement's predicate. The collector wiring is
+// responsible for populating this field with one of the registered
+// SLSA proto messages.
+func extractPredicate(stmt attestation.Statement) (proto.Message, error) {
+	p := stmt.GetPredicate()
+	if p == nil {
+		return nil, errors.New("statement has no predicate")
+	}
+	parsed := p.GetParsed()
+	if parsed == nil {
+		return nil, errors.New("predicate has no parsed payload")
+	}
+	msg, ok := parsed.(proto.Message)
+	if !ok {
+		return nil, fmt.Errorf("predicate parsed payload is not a proto message (got %T)", parsed)
+	}
+	return msg, nil
+}
+
+// convertSubjects projects the attestation.Subject interface onto the
+// concrete in-toto ResourceDescriptor type so CEL can iterate over it
+// using the registered proto descriptor.
+func convertSubjects(subs []attestation.Subject) []*intoto.ResourceDescriptor {
+	out := make([]*intoto.ResourceDescriptor, len(subs))
+	for i, s := range subs {
+		out[i] = &intoto.ResourceDescriptor{
+			Name:   s.GetName(),
+			Uri:    s.GetUri(),
+			Digest: s.GetDigest(),
+		}
+	}
+	return out
 }
