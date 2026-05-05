@@ -4,6 +4,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -16,6 +17,11 @@ const (
 	ExitVerifyFailed    = 1
 	ExitExecutionFailed = 2
 )
+
+// ErrVerifyFailed signals that the verifier ran successfully but the
+// attestation did not pass. Returning it from RunE causes Execute to exit
+// with ExitVerifyFailed without printing the usual "Error:" prefix.
+var ErrVerifyFailed = errors.New("attestation verification failed")
 
 const appname = "slsa-verifier"
 
@@ -36,6 +42,9 @@ controls.
 func Execute() {
 	addVerify(rootCmd)
 	if err := rootCmd.Execute(); err != nil {
+		if errors.Is(err, ErrVerifyFailed) {
+			os.Exit(ExitVerifyFailed)
+		}
 		fmt.Fprintf(os.Stderr, "Error: %s\n", err)
 		os.Exit(ExitExecutionFailed)
 	}
