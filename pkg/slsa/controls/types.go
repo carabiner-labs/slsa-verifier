@@ -8,6 +8,17 @@ import (
 	"fmt"
 )
 
+// Track names a SLSA spec track. Every control declares the track it
+// targets via its `track` field; the catalog assembles the
+// predicate-type → track mapping from those declarations rather than a
+// hard-coded list.
+type Track string
+
+const (
+	TrackBuild  Track = "build"
+	TrackSource Track = "source"
+)
+
 // Control models a single verification control: a labelled bundle of CEL
 // checks, each pinned to a specific predicate type.
 //
