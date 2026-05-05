@@ -4,11 +4,10 @@
 package predicate_test
 
 import (
-	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/carabiner-dev/attestation"
+	collectorpred "github.com/carabiner-dev/collector/predicate"
 	provenancev1 "github.com/in-toto/attestation/go/predicates/provenance/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -17,106 +16,63 @@ import (
 	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/predicate"
 )
 
-const sampleProvenanceV1JSON = `{
-  "_type": "https://in-toto.io/Statement/v1",
-  "subject": [
-    {"name": "out/binary", "digest": {"sha256": "deadbeef"}}
-  ],
-  "predicateType": "https://slsa.dev/provenance/v1",
-  "predicate": {
-    "buildDefinition": {
-      "buildType": "https://example.com/buildType/v1",
-      "externalParameters": {
-        "source": "git+https://example.com/repo"
-      }
-    },
-    "runDetails": {
-      "builder": {"id": "https://example.com/builder"}
-    }
-  }
-}`
-
-func TestParseStatementSLSAv1(t *testing.T) {
+func TestParserParsesV1(t *testing.T) {
 	t.Parallel()
 
-	stmt, err := predicate.ParseStatement([]byte(sampleProvenanceV1JSON))
+	p, ok := predicate.NewParser(attestation.PredicateType(eval.PredicateProvenanceV1))
+	require.True(t, ok)
+
+	pred, err := p.Parse([]byte(`{
+		"buildDefinition": {
+			"buildType": "https://example.com/buildType/v1",
+			"externalParameters": {"source": "git+https://example.com/repo"}
+		},
+		"runDetails": {"builder": {"id": "https://example.com/builder"}}
+	}`))
 	require.NoError(t, err)
-	require.NotNil(t, stmt)
 
-	assert.Equal(t, attestation.PredicateType(eval.PredicateProvenanceV1), stmt.GetPredicateType())
-	require.Len(t, stmt.GetSubjects(), 1)
-	assert.Equal(t, "out/binary", stmt.GetSubjects()[0].GetName())
-	assert.Equal(t, "deadbeef", stmt.GetSubjects()[0].GetDigest()["sha256"])
-
-	pred, ok := stmt.GetPredicate().GetParsed().(*provenancev1.Provenance)
-	require.True(t, ok, "predicate parsed payload should be *provenancev1.Provenance")
-	assert.Equal(t, "https://example.com/builder", pred.GetRunDetails().GetBuilder().GetId())
+	parsed, ok := pred.GetParsed().(*provenancev1.Provenance)
+	require.True(t, ok, "expected upstream *provenancev1.Provenance, got %T", pred.GetParsed())
+	assert.Equal(t, "https://example.com/builder", parsed.GetRunDetails().GetBuilder().GetId())
 }
 
-func TestParseStatementUnsupportedPredicate(t *testing.T) {
+func TestParserUnknownTypeReturnsFalse(t *testing.T) {
 	t.Parallel()
 
-	src := `{
-		"_type": "https://in-toto.io/Statement/v1",
-		"subject": [{"digest": {"sha256": "x"}}],
-		"predicateType": "https://example.com/some-other-attestation/v1",
-		"predicate": {}
-	}`
-	_, err := predicate.ParseStatement([]byte(src))
-	assert.ErrorIs(t, err, predicate.ErrUnsupportedPredicate)
+	_, ok := predicate.NewParser("https://example.com/unknown")
+	assert.False(t, ok)
 }
 
-func TestParseStatementEmptyPredicateType(t *testing.T) {
+func TestParserSupportsType(t *testing.T) {
 	t.Parallel()
 
-	src := `{
-		"_type": "https://in-toto.io/Statement/v1",
-		"subject": [{"digest": {"sha256": "x"}}],
-		"predicate": {}
-	}`
-	_, err := predicate.ParseStatement([]byte(src))
-	assert.Error(t, err)
+	p, _ := predicate.NewParser(attestation.PredicateType(eval.PredicateProvenanceV1))
+	assert.True(t, p.SupportsType(attestation.PredicateType(eval.PredicateProvenanceV1)))
+	assert.False(t, p.SupportsType("https://example.com/other"))
 }
 
-func TestParseStatementInvalidJSON(t *testing.T) {
+func TestParserMalformedJSONReturnsNotCorrectFormat(t *testing.T) {
 	t.Parallel()
 
-	_, err := predicate.ParseStatement([]byte(`not json`))
-	assert.Error(t, err)
+	p, _ := predicate.NewParser(attestation.PredicateType(eval.PredicateProvenanceV1))
+	_, err := p.Parse([]byte(`{"unknownField": true}`))
+	assert.ErrorIs(t, err, attestation.ErrNotCorrectFormat)
 }
 
-func TestParsePredicateRejectsUnknownType(t *testing.T) {
+// TestInitReplacesCollectorRegistry verifies that importing this package
+// installs the SLSA-only parser set on the collector's global registry.
+func TestInitReplacesCollectorRegistry(t *testing.T) {
 	t.Parallel()
 
-	_, err := predicate.ParsePredicate(
-		attestation.PredicateType("https://example.com/unknown"),
-		[]byte(`{}`),
-	)
-	assert.ErrorIs(t, err, predicate.ErrUnsupportedPredicate)
-}
+	// All four registered predicate types should now resolve to a
+	// SLSA Parser through the collector's global registry.
+	for _, pt := range eval.KnownPredicateTypes() {
+		got, ok := collectorpred.Parsers[attestation.PredicateType(pt)]
+		require.True(t, ok, "collector global missing %s", pt)
+		_, isSLSA := got.(*predicate.Parser)
+		assert.True(t, isSLSA, "collector parser for %s is %T, want *predicate.Parser", pt, got)
+	}
 
-func TestLoadStatement(t *testing.T) {
-	t.Parallel()
-
-	dir := t.TempDir()
-	path := filepath.Join(dir, "provenance.intoto.json")
-	require.NoError(t, os.WriteFile(path, []byte(sampleProvenanceV1JSON), 0o600))
-
-	stmt, err := predicate.LoadStatement(path)
-	require.NoError(t, err)
-	assert.Equal(t, attestation.PredicateType(eval.PredicateProvenanceV1), stmt.GetPredicateType())
-}
-
-func TestLoadStatementMissingFile(t *testing.T) {
-	t.Parallel()
-
-	_, err := predicate.LoadStatement(filepath.Join(t.TempDir(), "nope.json"))
-	assert.Error(t, err)
-}
-
-func TestPredicateImplementsAttestationPredicate(t *testing.T) {
-	t.Parallel()
-
-	var _ attestation.Predicate = (*predicate.Predicate)(nil)
-	var _ attestation.Statement = (*predicate.Statement)(nil)
+	// And no parsers for non-SLSA types should remain.
+	assert.Len(t, collectorpred.Parsers, len(eval.KnownPredicateTypes()))
 }
