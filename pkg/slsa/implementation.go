@@ -80,12 +80,17 @@ func newDefaultImplementation() (*defaultImplementation, error) {
 	return &defaultImplementation{evaluator: ev}, nil
 }
 
+// VerifySignatures is currently a no-op: the plain in-toto JSON loader
+// produced statements have no envelope to verify. DSSE / Sigstore bundle
+// support and real signature verification land in a later phase.
 func (*defaultImplementation) VerifySignatures(_ context.Context, _ *VerificationOptions, _ attestation.Statement) error {
-	return ErrNotImplemented
+	return nil
 }
 
+// CheckIdentities is currently a no-op. The identity-matching flags will
+// be introduced in a later phase.
 func (*defaultImplementation) CheckIdentities(_ context.Context, _ *VerificationOptions, _ attestation.Statement) error {
-	return ErrNotImplemented
+	return nil
 }
 
 // ResolveCategory routes the statement to a catalog category based on
@@ -156,7 +161,7 @@ func (d *defaultImplementation) evaluateControl(
 		return nil
 	}
 
-	cr := &ControlResult{ID: c.ID, Title: c.Title}
+	cr := &ControlResult{ID: c.ID, Title: c.Title, SLSALevel: c.SLSALevel}
 	for _, p := range match.Parameters {
 		if _, ok := params[p]; !ok {
 			cr.Status = StatusError
@@ -178,8 +183,70 @@ func (d *defaultImplementation) evaluateControl(
 	return cr
 }
 
-func (*defaultImplementation) ComputeResult(_ *VerificationOptions, _, _, _ []*ControlResult) (*Result, error) {
-	return nil, ErrNotImplemented
+// ComputeResult rolls up the per-layer control results into the final
+// verification result. Status is PASS only when no control failed or
+// errored across all three layers. The SLSA level is the highest
+// consecutive level (1..4) for which every core control declaring that
+// level passed; levels with no declared controls are skipped (treated as
+// trivially achieved as long as the chain is unbroken).
+func (*defaultImplementation) ComputeResult(_ *VerificationOptions, coreResults, buildTypeResults, userResults []*ControlResult) (*Result, error) {
+	r := &Result{
+		Status:           StatusPass,
+		CoreResults:      coreResults,
+		BuildTypeResults: buildTypeResults,
+		UserResults:      userResults,
+	}
+
+	for _, layer := range [][]*ControlResult{coreResults, buildTypeResults, userResults} {
+		for _, cr := range layer {
+			if cr.Status != StatusPass {
+				r.Status = StatusFail
+				break
+			}
+		}
+		if r.Status == StatusFail {
+			break
+		}
+	}
+
+	r.SLSALevel = computeSLSALevel(coreResults)
+	return r, nil
+}
+
+const maxSLSALevel = 4
+
+// computeSLSALevel returns the highest consecutive level (1..maxSLSALevel)
+// for which every core control declaring that level passed. Levels with
+// no declared controls are passed through transparently — they neither
+// raise nor break the chain.
+func computeSLSALevel(coreResults []*ControlResult) int {
+	byLevel := map[int][]*ControlResult{}
+	for _, cr := range coreResults {
+		if cr.SLSALevel == 0 {
+			continue
+		}
+		byLevel[cr.SLSALevel] = append(byLevel[cr.SLSALevel], cr)
+	}
+
+	maxLevel := 0
+	for level := 1; level <= maxSLSALevel; level++ {
+		crs, ok := byLevel[level]
+		if !ok {
+			continue
+		}
+		allPassed := true
+		for _, cr := range crs {
+			if cr.Status != StatusPass {
+				allPassed = false
+				break
+			}
+		}
+		if !allPassed {
+			break
+		}
+		maxLevel = level
+	}
+	return maxLevel
 }
 
 // extractPredicate returns the parsed proto message carried by the

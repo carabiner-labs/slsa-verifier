@@ -20,10 +20,11 @@ const (
 
 // ControlResult captures the outcome of evaluating a single control.
 type ControlResult struct {
-	ID      string
-	Title   string
-	Status  Status
-	Message string
+	ID        string
+	Title     string
+	SLSALevel int
+	Status    Status
+	Message   string
 }
 
 // Result is the final verification outcome returned to callers.
