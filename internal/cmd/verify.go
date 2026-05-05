@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/carabiner-labs/slsa-verifier/pkg/slsa"
+	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/controls"
 )
 
 // verifyOptions composes every OptionsSet needed by the verify command.
@@ -28,6 +29,11 @@ type verifyOptions struct {
 	// Verbose toggles inclusion of skipped controls and control titles in
 	// the verify summary roster.
 	Verbose bool
+
+	// Track selects the SLSA track to evaluate against. "auto" (default)
+	// asks the verifier to derive the track from the catalog; "build" or
+	// "source" force the track regardless of the predicate's classification.
+	Track string
 }
 
 // AddFlags registers all option sets on the verify command.
@@ -38,6 +44,10 @@ func (o *verifyOptions) AddFlags(cmd *cobra.Command) {
 	cmd.PersistentFlags().BoolVarP(
 		&o.Verbose, "verbose", "v", false,
 		"show skipped controls and control titles in the summary",
+	)
+	cmd.PersistentFlags().StringVar(
+		&o.Track, "track", "auto",
+		`SLSA track to evaluate against ("auto", "build", or "source")`,
 	)
 }
 
@@ -53,7 +63,25 @@ func (o *verifyOptions) Validate() error {
 	} else if _, err := os.Stat(o.AttestationPath); err != nil {
 		errs = append(errs, fmt.Errorf("attestation file: %w", err))
 	}
+	switch o.Track {
+	case "auto", string(controls.TrackBuild), string(controls.TrackSource):
+	default:
+		errs = append(errs, fmt.Errorf(
+			`invalid --track %q (want "auto", %q, or %q)`,
+			o.Track, controls.TrackBuild, controls.TrackSource,
+		))
+	}
 	return errors.Join(errs...)
+}
+
+// forcedTrack maps the CLI flag value to the verifier's ForceTrack
+// option: "auto" (or empty) → empty (auto resolution); track names pass
+// through.
+func (o *verifyOptions) forcedTrack() controls.Track {
+	if o.Track == "" || o.Track == "auto" {
+		return ""
+	}
+	return controls.Track(o.Track)
 }
 
 // addVerify registers the verify subcommand on parentCmd.
@@ -137,6 +165,7 @@ func runVerify(cmd *cobra.Command, opts *verifyOptions) error {
 		slsa.WithRequireSignatures(opts.RequireSignatures),
 		slsa.WithExpectedSigners(opts.Signers),
 		slsa.WithUserControlList(opts.Controls),
+		slsa.WithTrack(opts.forcedTrack()),
 	)
 	// Signature / identity failures from the verification layer are a
 	// verification outcome (exit 1), not an execution failure (exit 2).
