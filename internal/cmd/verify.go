@@ -173,7 +173,11 @@ func printFailures(w io.Writer, label string, results []*slsa.ControlResult) {
 		if cr.Status == slsa.StatusPass {
 			continue
 		}
-		writef(w, "  [%s] %s (%s) — %s", label, cr.ID, cr.Status, cr.Title)
+		tag := label
+		if cr.SLSALevel > 0 {
+			tag = fmt.Sprintf("%s L%d", label, cr.SLSALevel)
+		}
+		writef(w, "  [%s] %s (%s) — %s", tag, cr.ID, cr.Status, cr.Title)
 		if cr.Message != "" {
 			writef(w, ": %s", cr.Message)
 		}
