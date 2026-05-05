@@ -24,8 +24,12 @@ type Verifier struct {
 // New constructs a Verifier with the embedded control catalog and the
 // default verifierImplementation. Pass options to override either.
 func New(opts ...Option) (*Verifier, error) {
+	impl, err := newDefaultImplementation()
+	if err != nil {
+		return nil, fmt.Errorf("constructing default implementation: %w", err)
+	}
 	v := &Verifier{
-		impl:                       &defaultImplementation{},
+		impl:                       impl,
 		Options:                    DefaultOptions(),
 		defaultVerificationOptions: DefaultVerificationOptions(),
 	}
