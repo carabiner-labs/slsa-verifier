@@ -41,8 +41,11 @@ func NewParser(predicateType attestation.PredicateType) (*Parser, bool) {
 }
 
 // Parse unmarshals data into the proto message backing this parser's
-// predicate type and wraps it in a generic.Predicate so the collector can
-// thread it through statements and envelopes.
+// predicate type and wraps it in a generic.Predicate so the collector
+// can thread it through statements and envelopes. After unmarshalling,
+// nil singular sub-messages are replaced with zero-valued instances so
+// CEL expressions can chain through intermediate fields without
+// erroring on missing payload data.
 func (p *Parser) Parse(data []byte) (attestation.Predicate, error) {
 	msg, _ := eval.NewPredicate(string(p.predicateType))
 	if err := protojson.Unmarshal(data, msg); err != nil {
@@ -51,6 +54,7 @@ func (p *Parser) Parse(data []byte) (attestation.Predicate, error) {
 		}
 		return nil, fmt.Errorf("parsing %s predicate: %w", p.predicateType, err)
 	}
+	eval.FillNilMessages(msg)
 	return &generic.Predicate{
 		Type:   p.predicateType,
 		Parsed: msg,
