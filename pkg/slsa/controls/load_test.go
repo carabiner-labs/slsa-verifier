@@ -16,6 +16,7 @@ import (
 
 const sampleControl = `id: my-check
 title: Custom user check
+track: build
 checks:
   - predicateType: https://slsa.dev/provenance/v1
     expression: "true"
@@ -23,12 +24,14 @@ checks:
 
 const sampleControlMultiDoc = `id: a
 title: A
+track: build
 checks:
   - predicateType: https://slsa.dev/provenance/v1
     expression: "true"
 ---
 id: b
 title: B
+track: build
 checks:
   - predicateType: https://slsa.dev/provenance/v1
     expression: "false"
@@ -89,6 +92,7 @@ func TestLoadInvalidControlReturnsError(t *testing.T) {
 	dir := t.TempDir()
 	// Missing title — Validate fails.
 	path := writeFile(t, dir, "bad.yaml", `id: x
+track: build
 checks:
   - predicateType: https://slsa.dev/provenance/v1
     expression: "true"

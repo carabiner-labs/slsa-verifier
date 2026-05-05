@@ -39,6 +39,9 @@ func loadFile(path string) ([]*Control, error) {
 		if vErr := c.Validate(); vErr != nil {
 			return nil, fmt.Errorf("invalid control in %s: %w", path, vErr)
 		}
+		if vErr := validateTrack(c); vErr != nil {
+			return nil, fmt.Errorf("invalid control in %s: %w", path, vErr)
+		}
 	}
 	return ctrls, nil
 }
