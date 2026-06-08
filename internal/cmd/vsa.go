@@ -45,7 +45,8 @@ func (o *vsaOptions) AddFlags(cmd *cobra.Command) {
 	)
 	cmd.PersistentFlags().StringArrayVar(
 		&o.Levels, "level", nil,
-		"expected verifiedLevels entry (repeatable; OR-matched — at least one must appear)",
+		"required SLSA level, e.g. SLSA_BUILD_LEVEL_3 (repeatable; OR-matched; "+
+			"at-or-above within the same track — SLSA_BUILD_LEVEL_4 satisfies a want of SLSA_BUILD_LEVEL_3)",
 	)
 	cmd.PersistentFlags().StringVar(
 		&o.Resource, "resource", "",
@@ -100,7 +101,8 @@ version-neutral representation and the following checks run:
 
   * verificationResult must be "PASSED" (always enforced)
   * verifier.id must equal --verifier (always enforced)
-  * verifiedLevels must contain at least one of --level (if any --level given)
+  * verifiedLevels must satisfy one of --level (at-or-above per track; e.g.
+    --level SLSA_BUILD_LEVEL_3 is satisfied by SLSA_BUILD_LEVEL_3 or SLSA_BUILD_LEVEL_4)
   * resourceUri must equal --resource (if set)
   * policy.uri must equal --policy (if set)
   * dependencyLevels must contain every --dependency key (if any given)`,

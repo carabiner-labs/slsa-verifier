@@ -137,7 +137,10 @@ func TestVerifyVSAVerifierMismatchFails(t *testing.T) {
 func TestVerifyVSALevelOrMatched(t *testing.T) {
 	t.Parallel()
 
-	// Only one of the listed levels has to appear (OR semantics).
+	// fixture has verifiedLevels = ["SLSA_BUILD_LEVEL_3"]
+	// At-least one of the listed wants must be satisfied. Both pass
+	// here (the second is the actual level, the first is below it
+	// and is satisfied by at-or-above semantics).
 	result, err := New().VerifyVSA(context.Background(), vsaEnv(nil), VSAOptions{
 		Verifier: "https://verify.example.com",
 		Levels:   []string{"SLSA_BUILD_LEVEL_4", "SLSA_BUILD_LEVEL_3"},
@@ -146,15 +149,49 @@ func TestVerifyVSALevelOrMatched(t *testing.T) {
 	assert.True(t, result.Pass())
 }
 
-func TestVerifyVSALevelMismatchFails(t *testing.T) {
+func TestVerifyVSALevelAtOrAboveSatisfies(t *testing.T) {
 	t.Parallel()
 
+	// VSA reports LEVEL_4, want LEVEL_3 → satisfied.
+	env := vsaEnv(func(p *vsav1.VerificationSummary) {
+		p.VerifiedLevels = []string{"SLSA_BUILD_LEVEL_4"}
+	})
+	result, err := New().VerifyVSA(context.Background(), env, VSAOptions{
+		Verifier: "https://verify.example.com",
+		Levels:   []string{"SLSA_BUILD_LEVEL_3"},
+	})
+	require.NoError(t, err)
+	assert.True(t, result.Pass(),
+		"VSA at SLSA_BUILD_LEVEL_4 must satisfy --level SLSA_BUILD_LEVEL_3")
+}
+
+func TestVerifyVSALevelBelowWantFails(t *testing.T) {
+	t.Parallel()
+
+	// fixture has SLSA_BUILD_LEVEL_3, want LEVEL_4 → fails (3 < 4).
 	result, err := New().VerifyVSA(context.Background(), vsaEnv(nil), VSAOptions{
 		Verifier: "https://verify.example.com",
 		Levels:   []string{"SLSA_BUILD_LEVEL_4"},
 	})
 	require.NoError(t, err)
 	assert.False(t, result.Pass())
+}
+
+func TestVerifyVSALevelDifferentTrackFails(t *testing.T) {
+	t.Parallel()
+
+	// VSA reports SLSA_BUILD_LEVEL_4; want a SOURCE level. Different
+	// track → no satisfaction even at a higher number.
+	env := vsaEnv(func(p *vsav1.VerificationSummary) {
+		p.VerifiedLevels = []string{"SLSA_BUILD_LEVEL_4"}
+	})
+	result, err := New().VerifyVSA(context.Background(), env, VSAOptions{
+		Verifier: "https://verify.example.com",
+		Levels:   []string{"SLSA_SOURCE_LEVEL_3"},
+	})
+	require.NoError(t, err)
+	assert.False(t, result.Pass(),
+		"different track must not satisfy regardless of level number")
 }
 
 func TestVerifyVSADependenciesAndMatched(t *testing.T) {

@@ -7,7 +7,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"slices"
 
 	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/vsa"
 )
@@ -20,7 +19,11 @@ import (
 //     a VSA with no asserted verifier identity carries very weak
 //     trust value, so VerifyVSA returns an error if it is empty.
 //   - Levels is OR-matched against VSA.VerifiedLevels — at least one
-//     listed level must appear. Skipped when empty.
+//     listed level must be satisfied. For canonical SLSA level
+//     strings (e.g. SLSA_BUILD_LEVEL_3) the match is "at-or-above":
+//     a VSA verifiedLevel of SLSA_BUILD_LEVEL_4 satisfies a want of
+//     SLSA_BUILD_LEVEL_3 within the same track. Non-canonical
+//     strings only match exactly. Skipped when empty.
 //   - Resource and Policy are exact-match against ResourceURI and
 //     Policy.URI respectively. Skipped when empty.
 //   - Dependencies is AND-matched: every key must appear in
@@ -150,12 +153,18 @@ func checkVSAVerifier(v *vsa.VSA, want string) VSACheck {
 	return c
 }
 
+// checkVSALevels OR-matches the VSA's verifiedLevels against want.
+// For canonical SLSA level strings the comparison is at-or-above
+// within the same track (see matchesLevel); freeform strings only
+// match exactly.
 func checkVSALevels(v *vsa.VSA, want []string) VSACheck {
-	c := VSACheck{Name: fmt.Sprintf("verifiedLevels matches one of %v", want)}
+	c := VSACheck{Name: fmt.Sprintf("verifiedLevels satisfies one of %v (or higher per track)", want)}
 	for _, w := range want {
-		if slices.Contains(v.VerifiedLevels, w) {
-			c.Pass = true
-			return c
+		for _, observed := range v.VerifiedLevels {
+			if matchesLevel(w, observed) {
+				c.Pass = true
+				return c
+			}
 		}
 	}
 	c.Message = fmt.Sprintf("verifiedLevels = %v", v.VerifiedLevels)
