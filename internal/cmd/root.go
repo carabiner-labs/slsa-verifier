@@ -40,7 +40,11 @@ controls.
 // Execute runs the CLI. The CLI translates verifier outcomes to exit
 // codes: 0 for pass, 1 for verification failure, 2 for execution errors.
 func Execute() {
-	addVerify(rootCmd)
+	shared := &sharedOptions{}
+	shared.AddFlags(rootCmd)
+	addBuild(rootCmd, shared)
+	addVSA(rootCmd, shared)
+	addSource(rootCmd, shared)
 	if err := rootCmd.Execute(); err != nil {
 		if errors.Is(err, ErrVerifyFailed) {
 			os.Exit(ExitVerifyFailed)

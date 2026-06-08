@@ -6,6 +6,7 @@ package cmd
 import (
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 	"text/tabwriter"
 
@@ -35,9 +36,19 @@ func printResult(w io.Writer, result *slsa.Result, verbose bool) {
 	printLayer(w, "User", result.UserResults, verbose)
 }
 
-// printLayer renders one layer's roster as an aligned table.
+// printLayer renders one layer's roster as an aligned table. Within a
+// layer the entries are ordered by SLSA level ascending, then by id —
+// L1 controls before L2 before L3, alphabetical inside a level. Items
+// without a declared level (level 0) sort first so they don't break
+// the level chain visually.
 func printLayer(w io.Writer, label string, results []*slsa.ControlResult, verbose bool) {
 	visible := filterVisible(results, verbose)
+	sort.SliceStable(visible, func(i, j int) bool {
+		if visible[i].SLSALevel != visible[j].SLSALevel {
+			return visible[i].SLSALevel < visible[j].SLSALevel
+		}
+		return visible[i].ID < visible[j].ID
+	})
 
 	writef(w, "%s controls:\n", label)
 	if len(visible) == 0 {

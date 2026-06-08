@@ -24,18 +24,6 @@ func TestSigningOptionsParsesSignerSpec(t *testing.T) {
 	assert.Equal(t, "user@example.com", so.Signers[0].GetSigstore().GetIdentity())
 }
 
-func TestSigningOptionsImpliesRequireSignatures(t *testing.T) {
-	t.Parallel()
-
-	so := &signingOptions{
-		SignerSpecs: []string{
-			"sigstore::https://accounts.google.com::user@example.com",
-		},
-	}
-	require.NoError(t, so.Validate())
-	assert.True(t, so.RequireSignatures, "--signer should imply --require-signatures")
-}
-
 func TestSigningOptionsAccumulatesSigners(t *testing.T) {
 	t.Parallel()
 
@@ -59,11 +47,10 @@ func TestSigningOptionsMalformedSpecErrors(t *testing.T) {
 	assert.Error(t, err)
 }
 
-func TestSigningOptionsNoSignerLeavesRequireSignaturesUntouched(t *testing.T) {
+func TestSigningOptionsNoSignerLeavesSignersEmpty(t *testing.T) {
 	t.Parallel()
 
 	so := &signingOptions{}
 	require.NoError(t, so.Validate())
-	assert.False(t, so.RequireSignatures)
 	assert.Empty(t, so.Signers)
 }

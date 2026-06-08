@@ -16,9 +16,13 @@ import (
 	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/controls"
 )
 
-// verifyOptions composes every OptionsSet needed by the verify command.
-type verifyOptions struct {
-	paramOptions
+// buildOptions composes every OptionsSet needed by the build command.
+// The shared flags (--param, --key, --require-signatures) come from
+// sharedOptions registered on the root command; this struct only owns
+// the build-specific flags.
+type buildOptions struct {
+	shared *sharedOptions
+
 	signingOptions
 	controlsOptions
 
@@ -29,32 +33,23 @@ type verifyOptions struct {
 	// Verbose toggles inclusion of skipped controls and control titles in
 	// the verify summary roster.
 	Verbose bool
-
-	// Track selects the SLSA track to evaluate against. "auto" (default)
-	// asks the verifier to derive the track from the catalog; "build" or
-	// "source" force the track regardless of the predicate's classification.
-	Track string
 }
 
-// AddFlags registers all option sets on the verify command.
-func (o *verifyOptions) AddFlags(cmd *cobra.Command) {
-	o.paramOptions.AddFlags(cmd)
+// AddFlags registers the build-specific flags on cmd.
+func (o *buildOptions) AddFlags(cmd *cobra.Command) {
 	o.signingOptions.AddFlags(cmd)
 	o.controlsOptions.AddFlags(cmd)
 	cmd.PersistentFlags().BoolVarP(
 		&o.Verbose, "verbose", "v", false,
 		"show skipped controls and control titles in the summary",
 	)
-	cmd.PersistentFlags().StringVar(
-		&o.Track, "track", "auto",
-		`SLSA track to evaluate against ("auto", "build", or "source")`,
-	)
 }
 
-// Validate runs every option set's validator.
-func (o *verifyOptions) Validate() error {
+// Validate runs every option set's validator and propagates implications
+// to the shared options struct.
+func (o *buildOptions) Validate() error {
 	errs := []error{
-		o.paramOptions.Validate(),
+		o.shared.Validate(),
 		o.signingOptions.Validate(),
 		o.controlsOptions.Validate(),
 	}
@@ -63,41 +58,28 @@ func (o *verifyOptions) Validate() error {
 	} else if _, err := os.Stat(o.AttestationPath); err != nil {
 		errs = append(errs, fmt.Errorf("attestation file: %w", err))
 	}
-	switch o.Track {
-	case "auto", string(controls.TrackBuild), string(controls.TrackSource):
-	default:
-		errs = append(errs, fmt.Errorf(
-			`invalid --track %q (want "auto", %q, or %q)`,
-			o.Track, controls.TrackBuild, controls.TrackSource,
-		))
+	// --signer implies --require-signatures: matching an identity on an
+	// unsigned statement is meaningless.
+	if len(o.Signers) > 0 {
+		o.shared.RequireSignatures = true
 	}
 	return errors.Join(errs...)
 }
 
-// forcedTrack maps the CLI flag value to the verifier's ForceTrack
-// option: "auto" (or empty) → empty (auto resolution); track names pass
-// through.
-func (o *verifyOptions) forcedTrack() controls.Track {
-	if o.Track == "" || o.Track == "auto" {
-		return ""
-	}
-	return controls.Track(o.Track)
-}
-
-// addVerify registers the verify subcommand on parentCmd.
-func addVerify(parentCmd *cobra.Command) {
-	opts := &verifyOptions{}
-	verifyCmd := &cobra.Command{
-		Short: "Verify a SLSA attestation",
-		Long: `Verify a SLSA build or source attestation against the SLSA
-spec-defined controls and any user-supplied controls.
+// addBuild registers the build subcommand on parentCmd.
+func addBuild(parentCmd *cobra.Command, shared *sharedOptions) {
+	opts := &buildOptions{shared: shared}
+	buildCmd := &cobra.Command{
+		Short: "Verify a SLSA build attestation",
+		Long: `Verify a SLSA build attestation against the SLSA spec-defined
+build-track controls and any user-supplied controls.
 
 The attestation may be supplied as a plain in-toto statement, a DSSE
 envelope (signed with one or more keys via --key), or a Sigstore
 bundle.`,
-		Use: "verify <attestation-path>",
+		Use: "build <attestation-path>",
 		Example: fmt.Sprintf(
-			`%s verify --param=expected_source:git+https://example.com/repo provenance.intoto.json`,
+			`%s build --param=expected_source:git+https://example.com/repo provenance.intoto.json`,
 			appname,
 		),
 		SilenceUsage:  false,
@@ -112,15 +94,15 @@ bundle.`,
 				return err
 			}
 			cmd.SilenceUsage = true
-			return runVerify(cmd, opts)
+			return runBuild(cmd, opts)
 		},
 	}
-	opts.AddFlags(verifyCmd)
-	parentCmd.AddCommand(verifyCmd)
+	opts.AddFlags(buildCmd)
+	parentCmd.AddCommand(buildCmd)
 }
 
-func runVerify(cmd *cobra.Command, opts *verifyOptions) error {
-	keys, err := opts.ParseKeys()
+func runBuild(cmd *cobra.Command, opts *buildOptions) error {
+	keys, err := opts.shared.ParseKeys()
 	if err != nil {
 		return fmt.Errorf("parsing keys: %w", err)
 	}
@@ -161,11 +143,11 @@ func runVerify(cmd *cobra.Command, opts *verifyOptions) error {
 	result, err := v.Verify(
 		cmd.Context(),
 		stmt,
-		slsa.WithParams(opts.Params),
-		slsa.WithRequireSignatures(opts.RequireSignatures),
+		slsa.WithParams(opts.shared.Params),
+		slsa.WithRequireSignatures(opts.shared.RequireSignatures),
 		slsa.WithExpectedSigners(opts.Signers),
 		slsa.WithUserControlList(opts.Controls),
-		slsa.WithTrack(opts.forcedTrack()),
+		slsa.WithTrack(controls.TrackBuild),
 	)
 	// Signature / identity failures from the verification layer are a
 	// verification outcome (exit 1), not an execution failure (exit 2).

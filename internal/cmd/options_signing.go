@@ -8,24 +8,18 @@ import (
 	"fmt"
 
 	"github.com/carabiner-dev/command"
-	"github.com/carabiner-dev/command/keys"
 	sapi "github.com/carabiner-dev/signer/api/v1"
 	"github.com/spf13/cobra"
 )
 
 var _ command.OptionsSet = &signingOptions{}
 
-// signingOptions wraps the carabiner keys OptionsSet (--key/-k) and adds
-// the verifier's signature-related flags: --require-signatures and
-// --signer (repeatable, takes a signer/api/v1 spec string).
+// signingOptions exposes --signer (repeatable, takes a signer/api/v1
+// spec string). Supplying any --signer implies that signatures are
+// required; subcommands that embed this set must propagate that to
+// sharedOptions.RequireSignatures during their own Validate.
 type signingOptions struct {
-	keys.Options
-
 	config *command.OptionsSetConfig
-
-	// RequireSignatures, when true, fails verification if the statement
-	// is unsigned or its signature did not verify.
-	RequireSignatures bool
 
 	// SignerSpecs is the raw --signer flag values from the command line.
 	SignerSpecs []string
@@ -39,10 +33,6 @@ func (so *signingOptions) Config() *command.OptionsSetConfig {
 	if so.config == nil {
 		so.config = &command.OptionsSetConfig{
 			Flags: map[string]command.FlagConfig{
-				"require-signatures": {
-					Long: "require-signatures",
-					Help: "fail verification if the statement is unsigned or its signature did not verify",
-				},
 				"signer": {
 					Long: "signer",
 					Help: "expected signer identity as a spec string (repeatable; OR matched). " +
@@ -57,13 +47,6 @@ func (so *signingOptions) Config() *command.OptionsSetConfig {
 }
 
 func (so *signingOptions) AddFlags(cmd *cobra.Command) {
-	so.Options.AddFlags(cmd)
-	cmd.PersistentFlags().BoolVar(
-		&so.RequireSignatures,
-		so.Config().LongFlag("require-signatures"),
-		false,
-		so.Config().HelpText("require-signatures"),
-	)
 	cmd.PersistentFlags().StringArrayVar(
 		&so.SignerSpecs,
 		so.Config().LongFlag("signer"),
@@ -73,9 +56,6 @@ func (so *signingOptions) AddFlags(cmd *cobra.Command) {
 }
 
 func (so *signingOptions) Validate() error {
-	if err := so.Options.Validate(); err != nil {
-		return err
-	}
 	errs := []error{}
 	for _, spec := range so.SignerSpecs {
 		id, err := sapi.NewIdentityFromSpec(spec)
@@ -84,11 +64,6 @@ func (so *signingOptions) Validate() error {
 			continue
 		}
 		so.Signers = append(so.Signers, id)
-	}
-	// --signer implies --require-signatures: matching an identity on an
-	// unsigned statement is meaningless.
-	if len(so.Signers) > 0 {
-		so.RequireSignatures = true
 	}
 	return errors.Join(errs...)
 }
