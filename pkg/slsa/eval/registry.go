@@ -11,7 +11,10 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// SLSA predicate type URIs supported by the verifier.
+// SLSA predicate type URIs supported by the verifier. VSA predicate
+// types live in pkg/slsa/vsa; they're parsed by adapters there rather
+// than via the protojson path used here, so they're not registered
+// in this map.
 const (
 	PredicateProvenanceV01    = "https://slsa.dev/provenance/v0.1"
 	PredicateProvenanceV02    = "https://slsa.dev/provenance/v0.2"
