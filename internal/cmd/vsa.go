@@ -8,16 +8,14 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"slices"
 	"sort"
 	"strings"
 	"text/tabwriter"
 
-	"github.com/carabiner-dev/collector/envelope"
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 
-	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/vsa"
+	"github.com/carabiner-labs/slsa-verifier/pkg/attestation"
 )
 
 // vsaOptions composes the flags specific to the vsa subcommand. The
@@ -29,25 +27,10 @@ import (
 type vsaOptions struct {
 	shared *sharedOptions
 
-	// Verifier is matched exactly against the VSA's verifier.id field.
-	// Required: a VSA without an attributed verifier offers very weak
-	// trust value.
-	Verifier string
-
-	// Levels, when non-empty, are OR-matched against the VSA's
-	// verifiedLevels (v1) or PolicyLevel folded into a single-element
-	// list (v0.2). At least one entry must appear in the VSA.
-	Levels []string
-
-	// Resource, when set, must equal the VSA's resourceUri field.
-	Resource string
-
-	// Policy, when set, must equal the VSA's policy.uri field.
-	Policy string
-
-	// Dependencies, when non-empty, must EACH appear as a key in the
-	// VSA's dependencyLevels map (AND-matched). Used to assert that the
-	// producer reported a count for every level the caller cares about.
+	Verifier     string
+	Levels       []string
+	Resource     string
+	Policy       string
 	Dependencies []string
 
 	// AttestationPath is the positional argument: path to the VSA
@@ -89,6 +72,19 @@ func (o *vsaOptions) Validate() error {
 		errs = append(errs, fmt.Errorf("attestation file: %w", err))
 	}
 	return errors.Join(errs...)
+}
+
+// toLibOptions converts the CLI flag struct to the library's
+// VSAOptions. Kept as a tiny adapter so the CLI flag layer can evolve
+// independently of the library's public option fields.
+func (o *vsaOptions) toLibOptions() attestation.VSAOptions {
+	return attestation.VSAOptions{
+		Verifier:     o.Verifier,
+		Levels:       o.Levels,
+		Resource:     o.Resource,
+		Policy:       o.Policy,
+		Dependencies: o.Dependencies,
+	}
 }
 
 // addVSA registers the vsa subcommand on parentCmd.
@@ -138,157 +134,31 @@ func runVSA(cmd *cobra.Command, opts *vsaOptions) error {
 		return fmt.Errorf("parsing keys: %w", err)
 	}
 
-	envs, err := envelope.Parsers.ParseFiles([]string{opts.AttestationPath})
+	v := attestation.New()
+	env, err := v.Load(opts.AttestationPath)
 	if err != nil {
-		return fmt.Errorf("loading attestation: %w", err)
+		return err
 	}
-	if len(envs) == 0 {
-		return errors.New("no attestation parsed from file")
-	}
-	if len(envs) > 1 {
-		return fmt.Errorf("expected one attestation, got %d", len(envs))
-	}
-	env := envs[0]
-
-	if err := env.Verify(keys); err != nil {
-		return fmt.Errorf("verifying envelope signatures: %w", err)
-	}
-	if opts.shared.RequireSignatures && len(env.GetSignatures()) == 0 {
-		writef(cmd.OutOrStdout(), "%s\n  Signature: statement is unsigned and --require-signatures was set\n", redf("FAIL"))
-		return ErrVerifyFailed
-	}
-
-	stmt := env.GetStatement()
-	if stmt == nil {
-		return errors.New("envelope produced no statement")
-	}
-
-	v, err := vsa.FromStatement(stmt)
-	if err != nil {
-		if errors.Is(err, vsa.ErrNotVSA) {
-			return fmt.Errorf("%w (got %q)", err, stmt.GetPredicateType())
-		}
-		return fmt.Errorf("extracting VSA: %w", err)
-	}
-
-	checks := runVSAChecks(v, opts)
-	printVSAResult(cmd.OutOrStdout(), v, checks)
-	for _, c := range checks {
-		if !c.pass {
+	if err := v.VerifySignatures(env, attestation.SignatureOptions{
+		Keys:     keys,
+		Required: opts.shared.RequireSignatures,
+	}); err != nil {
+		if errors.Is(err, attestation.ErrSignatureRequired) {
+			writef(cmd.OutOrStdout(), "%s\n  Signature: %s\n", redf("FAIL"), err)
 			return ErrVerifyFailed
 		}
+		return err
+	}
+
+	result, err := v.VerifyVSA(cmd.Context(), env, opts.toLibOptions())
+	if err != nil {
+		return err
+	}
+	printVSAResult(cmd.OutOrStdout(), result)
+	if !result.Pass() {
+		return ErrVerifyFailed
 	}
 	return nil
-}
-
-// vsaCheck is the result of one hardcoded VSA check.
-type vsaCheck struct {
-	name    string
-	pass    bool
-	message string // populated on failure; describes got vs want
-}
-
-// runVSAChecks applies every hardcoded VSA check that is in scope for
-// opts (skipping optional checks whose flag is empty). Results are
-// returned in display order.
-func runVSAChecks(v *vsa.VSA, opts *vsaOptions) []vsaCheck {
-	checks := []vsaCheck{
-		checkVSAResult(v),
-		checkVSAVerifier(v, opts.Verifier),
-	}
-	if len(opts.Levels) > 0 {
-		checks = append(checks, checkVSALevels(v, opts.Levels))
-	}
-	if opts.Resource != "" {
-		checks = append(checks, checkVSAResource(v, opts.Resource))
-	}
-	if opts.Policy != "" {
-		checks = append(checks, checkVSAPolicy(v, opts.Policy))
-	}
-	if len(opts.Dependencies) > 0 {
-		checks = append(checks, checkVSADependencies(v, opts.Dependencies))
-	}
-	return checks
-}
-
-func checkVSAResult(v *vsa.VSA) vsaCheck {
-	c := vsaCheck{name: "Result is PASSED"}
-	if v.Passed() {
-		c.pass = true
-		return c
-	}
-	got := v.VerificationResult
-	if got == "" {
-		got = "(empty)"
-	}
-	c.message = fmt.Sprintf("verificationResult = %s", got)
-	return c
-}
-
-func checkVSAVerifier(v *vsa.VSA, want string) vsaCheck {
-	c := vsaCheck{name: fmt.Sprintf("Verifier == %q", want)}
-	if v.Verifier.ID == want {
-		c.pass = true
-		return c
-	}
-	c.message = fmt.Sprintf("verifier.id = %q", v.Verifier.ID)
-	return c
-}
-
-func checkVSALevels(v *vsa.VSA, want []string) vsaCheck {
-	c := vsaCheck{name: fmt.Sprintf("verifiedLevels matches one of %v", want)}
-	for _, w := range want {
-		if slices.Contains(v.VerifiedLevels, w) {
-			c.pass = true
-			return c
-		}
-	}
-	c.message = fmt.Sprintf("verifiedLevels = %v", v.VerifiedLevels)
-	return c
-}
-
-func checkVSAResource(v *vsa.VSA, want string) vsaCheck {
-	c := vsaCheck{name: fmt.Sprintf("resourceUri == %q", want)}
-	if v.ResourceURI == want {
-		c.pass = true
-		return c
-	}
-	c.message = fmt.Sprintf("resourceUri = %q", v.ResourceURI)
-	return c
-}
-
-func checkVSAPolicy(v *vsa.VSA, want string) vsaCheck {
-	c := vsaCheck{name: fmt.Sprintf("policy.uri == %q", want)}
-	if v.Policy.URI == want {
-		c.pass = true
-		return c
-	}
-	c.message = fmt.Sprintf("policy.uri = %q", v.Policy.URI)
-	return c
-}
-
-// checkVSADependencies verifies that every key in want appears in the
-// VSA's dependencyLevels map. The count value is not consulted —
-// presence alone is the check. Missing keys are listed in the
-// failure message.
-func checkVSADependencies(v *vsa.VSA, want []string) vsaCheck {
-	c := vsaCheck{name: fmt.Sprintf("dependencyLevels contains all of %v", want)}
-	var missing []string
-	for _, w := range want {
-		if _, ok := v.DependencyLevels[w]; !ok {
-			missing = append(missing, w)
-		}
-	}
-	if len(missing) == 0 {
-		c.pass = true
-		return c
-	}
-	keys := make([]string, 0, len(v.DependencyLevels))
-	for k := range v.DependencyLevels {
-		keys = append(keys, k)
-	}
-	c.message = fmt.Sprintf("missing %v (have %v)", missing, keys)
-	return c
 }
 
 // formatDependencyLevels renders a dependencyLevels map as
@@ -310,8 +180,9 @@ func formatDependencyLevels(m map[string]uint64) string {
 // printVSAResult writes the PASS/FAIL header, a summary of the VSA's
 // key fields, and the table of check outcomes. Format mirrors the
 // build subcommand's printer so user-facing output stays consistent.
-func printVSAResult(w io.Writer, v *vsa.VSA, checks []vsaCheck) {
-	if allChecksPassed(checks) {
+func printVSAResult(w io.Writer, result *attestation.VSAResult) {
+	v := result.VSA
+	if result.Pass() {
 		writef(w, "%s\n", greenf("PASS"))
 	} else {
 		writef(w, "%s\n", redf("FAIL"))
@@ -339,23 +210,14 @@ func printVSAResult(w io.Writer, v *vsa.VSA, checks []vsaCheck) {
 
 	writef(w, "Checks:\n")
 	ct := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-	for _, c := range checks {
-		line := fmt.Sprintf("  %s\t%s", vsaCheckMarker(c.pass), c.name)
-		if !c.pass && c.message != "" {
-			line += "\t" + dimf(c.message)
+	for _, c := range result.Checks {
+		line := fmt.Sprintf("  %s\t%s", vsaCheckMarker(c.Pass), c.Name)
+		if !c.Pass && c.Message != "" {
+			line += "\t" + dimf(c.Message)
 		}
 		writef(ct, "%s\n", line)
 	}
 	flushTabWriter(ct)
-}
-
-func allChecksPassed(checks []vsaCheck) bool {
-	for _, c := range checks {
-		if !c.pass {
-			return false
-		}
-	}
-	return true
 }
 
 // vsaCheckMarker mirrors statusMarker but for the boolean pass/fail
