@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"slices"
+	"sort"
 	"strings"
 	"text/tabwriter"
 
@@ -44,6 +45,11 @@ type vsaOptions struct {
 	// Policy, when set, must equal the VSA's policy.uri field.
 	Policy string
 
+	// Dependencies, when non-empty, must EACH appear as a key in the
+	// VSA's dependencyLevels map (AND-matched). Used to assert that the
+	// producer reported a count for every level the caller cares about.
+	Dependencies []string
+
 	// AttestationPath is the positional argument: path to the VSA
 	// envelope file (plain in-toto statement, DSSE, or Sigstore bundle).
 	AttestationPath string
@@ -65,6 +71,10 @@ func (o *vsaOptions) AddFlags(cmd *cobra.Command) {
 	cmd.PersistentFlags().StringVar(
 		&o.Policy, "policy", "",
 		"expected policy.uri (exact match; skipped if empty)",
+	)
+	cmd.PersistentFlags().StringArrayVar(
+		&o.Dependencies, "dependency", nil,
+		"expected dependencyLevels key (repeatable; AND-matched — every entry must appear in the map)",
 	)
 }
 
@@ -96,7 +106,8 @@ version-neutral representation and the following checks run:
   * verifier.id must equal --verifier (always enforced)
   * verifiedLevels must contain at least one of --level (if any --level given)
   * resourceUri must equal --resource (if set)
-  * policy.uri must equal --policy (if set)`,
+  * policy.uri must equal --policy (if set)
+  * dependencyLevels must contain every --dependency key (if any given)`,
 		Use: "vsa <attestation-path>",
 		Example: fmt.Sprintf(
 			`%s vsa --verifier https://verify.example.com --level SLSA_BUILD_LEVEL_3 vsa.intoto.json`,
@@ -194,6 +205,9 @@ func runVSAChecks(v *vsa.VSA, opts *vsaOptions) []vsaCheck {
 	if opts.Policy != "" {
 		checks = append(checks, checkVSAPolicy(v, opts.Policy))
 	}
+	if len(opts.Dependencies) > 0 {
+		checks = append(checks, checkVSADependencies(v, opts.Dependencies))
+	}
 	return checks
 }
 
@@ -253,6 +267,46 @@ func checkVSAPolicy(v *vsa.VSA, want string) vsaCheck {
 	return c
 }
 
+// checkVSADependencies verifies that every key in want appears in the
+// VSA's dependencyLevels map. The count value is not consulted —
+// presence alone is the check. Missing keys are listed in the
+// failure message.
+func checkVSADependencies(v *vsa.VSA, want []string) vsaCheck {
+	c := vsaCheck{name: fmt.Sprintf("dependencyLevels contains all of %v", want)}
+	var missing []string
+	for _, w := range want {
+		if _, ok := v.DependencyLevels[w]; !ok {
+			missing = append(missing, w)
+		}
+	}
+	if len(missing) == 0 {
+		c.pass = true
+		return c
+	}
+	keys := make([]string, 0, len(v.DependencyLevels))
+	for k := range v.DependencyLevels {
+		keys = append(keys, k)
+	}
+	c.message = fmt.Sprintf("missing %v (have %v)", missing, keys)
+	return c
+}
+
+// formatDependencyLevels renders a dependencyLevels map as
+// "LEVEL=count, …" with keys in sorted order so the output is stable
+// across runs.
+func formatDependencyLevels(m map[string]uint64) string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	parts := make([]string, 0, len(keys))
+	for _, k := range keys {
+		parts = append(parts, fmt.Sprintf("%s=%d", k, m[k]))
+	}
+	return strings.Join(parts, ", ")
+}
+
 // printVSAResult writes the PASS/FAIL header, a summary of the VSA's
 // key fields, and the table of check outcomes. Format mirrors the
 // build subcommand's printer so user-facing output stays consistent.
@@ -276,6 +330,9 @@ func printVSAResult(w io.Writer, v *vsa.VSA, checks []vsaCheck) {
 	}
 	if len(v.VerifiedLevels) > 0 {
 		writef(tw, "  Levels:\t%s\n", strings.Join(v.VerifiedLevels, ", "))
+	}
+	if len(v.DependencyLevels) > 0 {
+		writef(tw, "  Dependencies:\t%s\n", formatDependencyLevels(v.DependencyLevels))
 	}
 	flushTabWriter(tw)
 	writef(w, "\n")
