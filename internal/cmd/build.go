@@ -25,6 +25,7 @@ type buildOptions struct {
 
 	signingOptions
 	controlsOptions
+	vsaOutputOptions
 
 	// AttestationPath is the positional argument: path to the attestation
 	// file (plain in-toto statement, DSSE envelope, or Sigstore bundle).
@@ -39,6 +40,7 @@ type buildOptions struct {
 func (o *buildOptions) AddFlags(cmd *cobra.Command) {
 	o.signingOptions.AddFlags(cmd)
 	o.controlsOptions.AddFlags(cmd)
+	o.vsaOutputOptions.AddFlags(cmd)
 	cmd.PersistentFlags().BoolVarP(
 		&o.Verbose, "verbose", "v", false,
 		"show skipped controls and control titles in the summary",
@@ -52,6 +54,7 @@ func (o *buildOptions) Validate() error {
 		o.shared.Validate(),
 		o.signingOptions.Validate(),
 		o.controlsOptions.Validate(),
+		o.vsaOutputOptions.Validate(),
 	}
 	if o.AttestationPath == "" {
 		errs = append(errs, errors.New("attestation path is required"))
@@ -148,6 +151,7 @@ func runBuild(cmd *cobra.Command, opts *buildOptions) error {
 		slsa.WithExpectedSigners(opts.Signers),
 		slsa.WithUserControlList(opts.Controls),
 		slsa.WithTrack(controls.TrackBuild),
+		slsa.WithVerifierID(verifierID),
 	)
 	// Signature / identity failures from the verification layer are a
 	// verification outcome (exit 1), not an execution failure (exit 2).
@@ -163,7 +167,15 @@ func runBuild(cmd *cobra.Command, opts *buildOptions) error {
 		return fmt.Errorf("running verification: %w", err)
 	}
 
-	printResult(cmd.OutOrStdout(), result, opts.Verbose)
+	// With --vsa, stdout carries the unsigned VSA JSON instead of the
+	// human-readable roster so it can be piped or stored directly.
+	if opts.EmitVSA {
+		if err := emitVSA(cmd.OutOrStdout(), stmt, result, controls.TrackBuild); err != nil {
+			return fmt.Errorf("emitting VSA: %w", err)
+		}
+	} else {
+		printResult(cmd.OutOrStdout(), result, opts.Verbose)
+	}
 	if !result.Pass() {
 		return ErrVerifyFailed
 	}

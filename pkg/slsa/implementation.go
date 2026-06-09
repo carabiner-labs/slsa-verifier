@@ -286,12 +286,15 @@ func (d *defaultImplementation) evaluateControl(
 // consecutive level (1..4) for which every core control declaring that
 // level passed; levels with no declared controls are skipped (treated as
 // trivially achieved as long as the chain is unbroken).
-func (*defaultImplementation) ComputeResult(_ *VerificationOptions, coreResults, buildTypeResults, userResults []*ControlResult) (*Result, error) {
+func (*defaultImplementation) ComputeResult(opts *VerificationOptions, coreResults, buildTypeResults, userResults []*ControlResult) (*Result, error) {
 	r := &Result{
 		Status:           StatusPass,
 		CoreResults:      coreResults,
 		BuildTypeResults: buildTypeResults,
 		UserResults:      userResults,
+	}
+	if opts != nil {
+		r.VerifierID = opts.VerifierID
 	}
 
 	for _, layer := range [][]*ControlResult{coreResults, buildTypeResults, userResults} {
