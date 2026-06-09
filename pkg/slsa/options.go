@@ -91,6 +91,13 @@ type VerificationOptions struct {
 	// Values are typically string or []string, matching what the --param
 	// CLI flag produces.
 	Params map[string]any
+
+	// VerifierID identifies the entity performing the verification. It is
+	// recorded on the Result and surfaces as verifier.id when a VSA is
+	// emitted from the outcome. The CLI sets it to the slsa-verifier
+	// project URL; consumer applications embedding the verifier should set
+	// their own identity. Empty by default.
+	VerifierID string
 }
 
 // DefaultVerificationOptions returns the default per-call options.
@@ -186,6 +193,17 @@ func WithParam(name string, value any) VerificationOption {
 func WithParams(params map[string]any) VerificationOption {
 	return func(o *VerificationOptions) error {
 		o.Params = params
+		return nil
+	}
+}
+
+// WithVerifierID sets the identity of the entity performing the
+// verification. It is recorded on the Result and used as verifier.id when
+// a VSA is emitted. Consumer applications embedding the verifier should
+// set their own identity here; the CLI sets the slsa-verifier project URL.
+func WithVerifierID(id string) VerificationOption {
+	return func(o *VerificationOptions) error {
+		o.VerifierID = id
 		return nil
 	}
 }

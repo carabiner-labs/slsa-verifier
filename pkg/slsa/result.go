@@ -40,6 +40,11 @@ type Result struct {
 	// SLSALevel is the highest SLSA level whose required core controls all passed.
 	SLSALevel int
 
+	// VerifierID is the identity of the entity that performed the
+	// verification, copied from VerificationOptions.VerifierID. It is used
+	// as verifier.id when a VSA is emitted from this result.
+	VerifierID string
+
 	// CoreResults holds per-control results for the SLSA spec-defined controls.
 	CoreResults []*ControlResult
 
