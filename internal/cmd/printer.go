@@ -27,7 +27,11 @@ func printResult(w io.Writer, result *slsa.Result, verbose bool) {
 		writef(w, "%s\n", redf("FAIL"))
 	}
 	if result.SLSALevel > 0 {
-		writef(w, "SLSA Level: %d\n", result.SLSALevel)
+		if result.SpecVersion != "" {
+			writef(w, "SLSA Level: %d (spec v%s)\n", result.SLSALevel, result.SpecVersion)
+		} else {
+			writef(w, "SLSA Level: %d\n", result.SLSALevel)
+		}
 	}
 	writef(w, "\n")
 
@@ -37,10 +41,9 @@ func printResult(w io.Writer, result *slsa.Result, verbose bool) {
 }
 
 // printLayer renders one layer's roster as an aligned table. Within a
-// layer the entries are ordered by SLSA level ascending, then by id —
-// L1 controls before L2 before L3, alphabetical inside a level. Items
-// without a declared level (level 0) sort first so they don't break
-// the level chain visually.
+// layer the entries are ordered by SLSA level ascending, then by id:
+// L1 controls before L2 before L3, alphabetical inside a level. Results
+// without a level (level 0) sort first so they don't break the chain.
 func printLayer(w io.Writer, label string, results []*slsa.ControlResult, verbose bool) {
 	visible := filterVisible(results, verbose)
 	sort.SliceStable(visible, func(i, j int) bool {
@@ -81,12 +84,8 @@ func printLayer(w io.Writer, label string, results []*slsa.ControlResult, verbos
 	writef(w, "\n")
 }
 
-// flushTabWriter wraps tabwriter.Flush and discards the error — terminal
-// flush failures aren't actionable here.
-//
-//nolint:errcheck,gosec // best-effort summary print
 func flushTabWriter(tw *tabwriter.Writer) {
-	tw.Flush()
+	tw.Flush() //nolint:errcheck,gosec
 }
 
 // filterVisible drops StatusSkipped entries when verbose is false.
@@ -104,9 +103,7 @@ func filterVisible(results []*slsa.ControlResult, verbose bool) []*slsa.ControlR
 	return out
 }
 
-// statusMarker returns the per-status marker. On a TTY (color enabled),
-// returns a coloured glyph; otherwise a plain bracketed tag suitable for
-// piping/grepping.
+// statusMarker returns the per-status marker. On a TTY renders with color
 func statusMarker(s slsa.Status) string {
 	if color.NoColor {
 		return "[" + string(s) + "]"

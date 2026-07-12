@@ -18,7 +18,7 @@ import (
 
 // buildOptions composes every OptionsSet needed by the build command.
 // The shared flags (--param, --key, --require-signatures) come from
-// sharedOptions registered on the root command; this struct only owns
+// sharedOptions registered on the root command, this struct only owns
 // the build-specific flags.
 type buildOptions struct {
 	shared *sharedOptions
@@ -31,6 +31,10 @@ type buildOptions struct {
 	// file (plain in-toto statement, DSSE envelope, or Sigstore bundle).
 	AttestationPath string
 
+	// Spec is the SLSA spec version whose criteria the attestation is
+	// verified against, empty means the latest the catalog defines.
+	Spec string
+
 	// Verbose toggles inclusion of skipped controls and control titles in
 	// the verify summary roster.
 	Verbose bool
@@ -41,6 +45,10 @@ func (o *buildOptions) AddFlags(cmd *cobra.Command) {
 	o.signingOptions.AddFlags(cmd)
 	o.controlsOptions.AddFlags(cmd)
 	o.vsaOutputOptions.AddFlags(cmd)
+	cmd.PersistentFlags().StringVar(
+		&o.Spec, "spec", "",
+		"SLSA spec version to verify against (eg 1.2) defaults to latest",
+	)
 	cmd.PersistentFlags().BoolVarP(
 		&o.Verbose, "verbose", "v", false,
 		"show skipped controls and control titles in the summary",
@@ -110,7 +118,7 @@ func runBuild(cmd *cobra.Command, opts *buildOptions) error {
 		return fmt.Errorf("parsing keys: %w", err)
 	}
 
-	// envelope.Parsers handles format detection (bare in-toto, DSSE,
+	// envelope.Parsers handles the format detection (bare in-toto, DSSE,
 	// Sigstore bundle) and produces an attestation.Envelope. The
 	// pkg/slsa/predicate package's init swap ensures the predicate is
 	// parsed with the upstream SLSA proto types.
@@ -127,7 +135,7 @@ func runBuild(cmd *cobra.Command, opts *buildOptions) error {
 	env := envs[0]
 
 	// Verify envelope signatures. Bare envelopes are unsigned and Verify
-	// is a no-op for them; DSSE uses keys; Sigstore bundles verify
+	// is a no-op for them. DSSE uses keys and Sigstore bundles verify
 	// against the embedded trust root.
 	if err := env.Verify(keys); err != nil {
 		return fmt.Errorf("verifying envelope signatures: %w", err)
@@ -151,9 +159,10 @@ func runBuild(cmd *cobra.Command, opts *buildOptions) error {
 		slsa.WithExpectedSigners(opts.Signers),
 		slsa.WithUserControlList(opts.Controls),
 		slsa.WithTrack(controls.TrackBuild),
+		slsa.WithSpecVersion(opts.Spec),
 		slsa.WithVerifierID(verifierID),
 	)
-	// Signature / identity failures from the verification layer are a
+	// Signature/identity failures from the verification layer are a
 	// verification outcome (exit 1), not an execution failure (exit 2).
 	if errors.Is(err, slsa.ErrSignatureRequired) {
 		writef(cmd.OutOrStdout(), "FAIL\n  Signature: %s\n", err)
@@ -182,10 +191,7 @@ func runBuild(cmd *cobra.Command, opts *buildOptions) error {
 	return nil
 }
 
-// writef wraps Fprintf and discards the result — terminal output failures
-// are not actionable in this context.
-//
-//nolint:errcheck // best-effort summary print
+// writef wraps Fprintf and discards the result
 func writef(w io.Writer, format string, args ...any) {
-	fmt.Fprintf(w, format, args...)
+	fmt.Fprintf(w, format, args...) //nolint:errcheck
 }

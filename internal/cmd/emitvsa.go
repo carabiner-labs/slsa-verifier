@@ -18,7 +18,7 @@ import (
 
 // verifierID is the verifier.id recorded in the VSAs this tool emits. It
 // identifies slsa-verifier as the entity that produced the summary.
-const verifierID = "https://github.com/carabiner-labs/slsa-verifier"
+const verifierID = "https://github.com/slsa-framework/verifier"
 
 // emitVSA writes an unsigned VSA v1 statement describing result to w. The
 // statement records the computed SLSA level (as verifiedLevels for the
@@ -28,8 +28,8 @@ const verifierID = "https://github.com/carabiner-labs/slsa-verifier"
 func emitVSA(w io.Writer, stmt cdattestation.Statement, result *slsa.Result, track controls.Track) error {
 	subjects := vsaSubjects(stmt)
 	// Prefer the identity carried on the result (set through
-	// WithVerifierID); fall back to this tool's own ID when a caller ran
-	// the verification without supplying one.
+	// WithVerifierID) or fall back to this tool's own ID when
+	// a caller ran the verification without supplying one.
 	id := result.VerifierID
 	if id == "" {
 		id = verifierID
@@ -40,6 +40,7 @@ func emitVSA(w io.Writer, stmt cdattestation.Statement, result *slsa.Result, tra
 		Subjects:           subjects,
 		VerificationResult: vsaResult(result),
 		VerifiedLevels:     verifiedLevels(track, result.SLSALevel),
+		SLSAVersion:        result.SpecVersion,
 	}
 	// Use the first subject's URI as the resource the VSA covers, when one
 	// is available.
@@ -69,7 +70,7 @@ func vsaResult(result *slsa.Result) string {
 }
 
 // verifiedLevels renders the computed SLSA level as the canonical
-// verifiedLevels entry for the track, e.g. "SLSA_BUILD_LEVEL_3". A
+// verifiedLevels entry for the track, eg SLSA_BUILD_LEVEL_3. A
 // non-positive level (nothing established) yields an empty list.
 func verifiedLevels(track controls.Track, level int) []string {
 	if level <= 0 {

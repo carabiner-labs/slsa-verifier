@@ -32,7 +32,7 @@ var officialSourceSANs = []string{
 
 // sourceOptions composes the OptionsSets the source command exposes. The
 // shared flags (--param, --key, --require-signatures) come from
-// sharedOptions registered on the root command; this struct only owns
+// sharedOptions registered on the root command, this struct only owns
 // the source-specific flags.
 type sourceOptions struct {
 	shared *sharedOptions
@@ -54,6 +54,10 @@ type sourceOptions struct {
 	// informative: they cap the computed level without failing the run.
 	MinLevel int
 
+	// Spec is the SLSA spec version whose criteria the attestation is
+	// verified against; empty means the latest the catalog defines.
+	Spec string
+
 	// Official toggles verification against the official SLSA
 	// source-actions signing identity. Implies --require-signatures.
 	Official bool
@@ -72,6 +76,10 @@ func (o *sourceOptions) AddFlags(cmd *cobra.Command) {
 		&o.Level, "level", "1",
 		"required SLSA source level, e.g. 3 or SLSA_SOURCE_LEVEL_3 "+
 			"(controls above it are informative; 0 requires every control to pass)",
+	)
+	cmd.PersistentFlags().StringVar(
+		&o.Spec, "spec", "",
+		"SLSA spec version to verify against, e.g. 1.2 (default: latest)",
 	)
 	cmd.PersistentFlags().BoolVar(
 		&o.Official, "official", false,
@@ -152,12 +160,13 @@ bundle. Passing --official requires the attestation to be signed by
 the official SLSA source-actions workflow.
 
 The verification passes when the attestation reaches the level given
-with --level (default 1); controls above it still run and determine
+with --level (default 1), controls above it still run and determine
 the SLSA source level reported (and emitted with --vsa), but do not
-fail the verification. State your expectations about the origin with
---param expected_source_repo:<uri> and --param expected_branch:<ref>;
---param enforced_since:<RFC3339> additionally requires every control
-to have been active since at or before that date.`,
+fail the verification.
+
+State your expectations about the origin with --param expected_source_repo:<uri>
+and --param expected_branch:<ref>. --param enforced_since:<RFC3339> additionally
+requires every control to have been active since at or before that date.`,
 		Use: "source <attestation-path>",
 		Example: fmt.Sprintf(
 			`%s source --level 3 --official --param expected_branch:refs/heads/main source-provenance.json`,
@@ -188,7 +197,7 @@ func runSource(cmd *cobra.Command, opts *sourceOptions) error {
 		return fmt.Errorf("parsing keys: %w", err)
 	}
 
-	// envelope.Parsers handles format detection (bare in-toto, DSSE,
+	// envelope.Parsers handles the format detection (bare in-toto, DSSE,
 	// Sigstore bundle) and produces an attestation.Envelope. The
 	// pkg/slsa/predicate package's init swap ensures the predicate is
 	// parsed with the source-tool proto types.
@@ -205,7 +214,7 @@ func runSource(cmd *cobra.Command, opts *sourceOptions) error {
 	env := envs[0]
 
 	// Verify envelope signatures. Bare envelopes are unsigned and Verify
-	// is a no-op for them; DSSE uses keys; Sigstore bundles verify
+	// is a no-op for them. DSSE uses keys, Sigstore bundles verify
 	// against the embedded trust root.
 	if err := env.Verify(keys); err != nil {
 		return fmt.Errorf("verifying envelope signatures: %w", err)
@@ -229,10 +238,11 @@ func runSource(cmd *cobra.Command, opts *sourceOptions) error {
 		slsa.WithExpectedSigners(opts.Signers),
 		slsa.WithUserControlList(opts.Controls),
 		slsa.WithTrack(controls.TrackSource),
+		slsa.WithSpecVersion(opts.Spec),
 		slsa.WithMinLevel(opts.MinLevel),
 		slsa.WithVerifierID(verifierID),
 	)
-	// Signature / identity failures from the verification layer are a
+	// Signature/identity failures from the verification layer are a
 	// verification outcome (exit 1), not an execution failure (exit 2).
 	if errors.Is(err, slsa.ErrSignatureRequired) {
 		writef(cmd.OutOrStdout(), "FAIL\n  Signature: %s\n", err)
