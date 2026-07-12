@@ -1,0 +1,39 @@
+# SPDX-FileCopyrightText: Copyright 2026 The SLSA Authors
+# SPDX-License-Identifier: Apache-2.0
+#
+# SLSA source track core verification catalog for SLSA v1.2, the spec
+# release that introduced the source track. Controls are defined once
+# under catalog/controls/; this manifest assigns each one the level the
+# spec requires it at (see README.md for the mapping rationale).
+---
+controls:
+  - id: source-repo-match
+    slsaLevel: 1
+  - id: source-branch-match
+    slsaLevel: 1
+  - id: source-control-org-scs
+    slsaLevel: 1
+  - id: source-control-scs-repo-id
+    slsaLevel: 1
+  - id: source-control-scs-revision-id
+    slsaLevel: 1
+  - id: source-control-scs-diff-display
+    slsaLevel: 1
+  - id: source-control-org-access-control
+    slsaLevel: 2
+  - id: source-control-org-safe-expunge
+    slsaLevel: 2
+  - id: source-control-scs-history
+    slsaLevel: 2
+  - id: source-control-scs-continuity
+    slsaLevel: 2
+  - id: source-control-scs-identity
+    slsaLevel: 2
+  - id: source-control-scs-provenance
+    slsaLevel: 2
+  - id: source-control-org-continuity
+    slsaLevel: 3
+  - id: source-control-scs-protected-refs
+    slsaLevel: 3
+  - id: source-control-scs-two-party-review
+    slsaLevel: 4
