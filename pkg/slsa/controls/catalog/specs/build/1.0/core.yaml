@@ -1,0 +1,19 @@
+# SPDX-FileCopyrightText: Copyright 2026 The SLSA Authors
+# SPDX-License-Identifier: Apache-2.0
+#
+# SLSA build track core verification catalog, criteria as defined since
+# SLSA v1.0 (unchanged through v1.2). Controls are defined once under
+# catalog/controls/; this manifest assigns each one the level the spec
+# requires it at.
+---
+controls:
+  - id: source-repo-match
+    slsaLevel: 1
+  - id: builder-id-trusted
+    slsaLevel: 2
+  - id: provenance-l2-complete
+    slsaLevel: 2
+  - id: provenance-has-invocation-id
+    slsaLevel: 3
+  - id: provenance-has-resolved-dependencies
+    slsaLevel: 3
