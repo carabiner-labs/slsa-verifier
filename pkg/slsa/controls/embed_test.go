@@ -208,18 +208,114 @@ func TestControlValidate(t *testing.T) {
 	}
 }
 
-func TestCategoryFromPath(t *testing.T) {
+func TestCategoryFromManifestPath(t *testing.T) {
 	t.Parallel()
 
 	cases := []struct {
 		root, file string
 		want       Category
 	}{
-		{"catalog", "catalog/build/core/foo.yaml", BuildCore},
-		{"catalog", "catalog/source/core/bar.yaml", SourceCore},
-		{"catalog", "catalog/build/buildType/x.yaml", BuildType},
+		{"catalog/specs", "catalog/specs/build/1.0/core.yaml", BuildCore},
+		{"catalog/specs", "catalog/specs/source/1.2/core.yaml", SourceCore},
+		{"catalog/specs", "catalog/specs/build/buildType.yaml", BuildType},
+		{"catalog/specs", "catalog/specs/source/1.3/core.yml", Category("source/1.3/core")},
 	}
 	for _, tc := range cases {
-		assert.Equal(t, tc.want, categoryFromPath(tc.root, tc.file))
+		assert.Equal(t, tc.want, categoryFromManifestPath(tc.root, tc.file))
 	}
+}
+
+func TestValidateCategory(t *testing.T) {
+	t.Parallel()
+
+	assert.NoError(t, validateCategory(BuildCore))
+	assert.NoError(t, validateCategory(SourceCore))
+	assert.NoError(t, validateCategory(BuildType))
+	assert.NoError(t, validateCategory(Category("source/1.3/core")))
+	assert.Error(t, validateCategory(Category("source/core")), "unversioned core must be rejected")
+	assert.Error(t, validateCategory(Category("source/notaversion/core")))
+	assert.Error(t, validateCategory(Category("core")))
+	assert.Error(t, validateCategory(Category("source/1.2/extra/core")))
+}
+
+func TestResolveCore(t *testing.T) {
+	t.Parallel()
+
+	cat, err := LoadEmbedded()
+	require.NoError(t, err)
+
+	// Empty spec resolves to the latest available version per track.
+	got, ver, err := cat.ResolveCore(TrackBuild, "")
+	require.NoError(t, err)
+	assert.Equal(t, BuildCore, got)
+	assert.Equal(t, "1.0", ver)
+
+	got, ver, err = cat.ResolveCore(TrackSource, "")
+	require.NoError(t, err)
+	assert.Equal(t, SourceCore, got)
+	assert.Equal(t, "1.2", ver)
+
+	// Criteria carry forward: a newer spec resolves to the newest
+	// catalog at or below it.
+	got, ver, err = cat.ResolveCore(TrackBuild, "1.2")
+	require.NoError(t, err)
+	assert.Equal(t, BuildCore, got)
+	assert.Equal(t, "1.0", ver)
+
+	got, ver, err = cat.ResolveCore(TrackSource, "v1.2")
+	require.NoError(t, err)
+	assert.Equal(t, SourceCore, got)
+	assert.Equal(t, "1.2", ver)
+
+	// A spec predating the track's first catalog is an error: the
+	// track did not exist in that release.
+	_, _, err = cat.ResolveCore(TrackSource, "1.1")
+	assert.Error(t, err)
+
+	// Malformed versions are errors.
+	_, _, err = cat.ResolveCore(TrackBuild, "one.two")
+	assert.Error(t, err)
+	_, _, err = cat.ResolveCore(TrackBuild, "1")
+	assert.Error(t, err)
+}
+
+func TestSpecVersionOf(t *testing.T) {
+	t.Parallel()
+
+	assert.Equal(t, "1.0", SpecVersionOf(BuildCore))
+	assert.Equal(t, "1.2", SpecVersionOf(SourceCore))
+	assert.Empty(t, SpecVersionOf(BuildType))
+	assert.Empty(t, SpecVersionOf(Category("nonsense")))
+}
+
+// TestManifestLevelsMatchSpec pins the source 1.2 manifest's control →
+// level mapping to the table in the SLSA v1.2 spec.
+func TestManifestLevelsMatchSpec(t *testing.T) {
+	t.Parallel()
+
+	cat, err := LoadEmbedded()
+	require.NoError(t, err)
+
+	want := map[string]int{
+		"source-repo-match":                   1,
+		"source-branch-match":                 1,
+		"source-control-org-scs":              1,
+		"source-control-scs-repo-id":          1,
+		"source-control-scs-revision-id":      1,
+		"source-control-scs-diff-display":     1,
+		"source-control-org-access-control":   2,
+		"source-control-org-safe-expunge":     2,
+		"source-control-scs-history":          2,
+		"source-control-scs-continuity":       2,
+		"source-control-scs-identity":         2,
+		"source-control-scs-provenance":       2,
+		"source-control-org-continuity":       3,
+		"source-control-scs-protected-refs":   3,
+		"source-control-scs-two-party-review": 4,
+	}
+	got := map[string]int{}
+	for _, c := range cat.Get(SourceCore) {
+		got[c.ID] = c.SLSALevel
+	}
+	assert.Equal(t, want, got)
 }
