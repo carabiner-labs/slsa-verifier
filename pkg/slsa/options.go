@@ -44,9 +44,7 @@ func WithImplementation(impl VerifierImplementation) Option {
 }
 
 // WithDefaultVerificationOptions sets the verification options that apply
-// to every Verify call unless overridden by per-call VerificationOptions.
-// The provided struct is copied; subsequent caller mutations don't affect
-// the verifier.
+// to every Verify call unless overridden by the iptions.
 func WithDefaultVerificationOptions(o *VerificationOptions) Option {
 	return func(v *Verifier) error {
 		if o != nil {
@@ -61,28 +59,28 @@ type VerificationOptions struct {
 	// RunBuildTypeControls toggles execution of custom buildType controls.
 	RunBuildTypeControls bool
 
-	// RunUserControls toggles execution of user-supplied controls.
+	// RunUserControls toggles execution of user supplied controls.
 	RunUserControls bool
 
 	// RequireSignatures, when true, fails verification if the statement
-	// does not carry a verified signature (i.e. it was loaded as plain
-	// in-toto JSON or its envelope failed to verify).
+	// does not carry a verified signature (ie loaded as a plain in-toto envelope
+	// or failed to verify).
 	RequireSignatures bool
 
 	// UserControls is the list of user-supplied controls evaluated when
 	// RunUserControls is true.
 	UserControls []*controls.Control
 
-	// ExpectedSigners is the set of identities the statement may be signed
-	// by. When non-empty, CheckIdentities accepts the statement only if at
-	// least one verified signer matches one of these (OR semantics). An
-	// empty list is the default and skips identity matching.
+	// ExpectedSigners is the set of identities alloed to sign the statement.
+	// When set, CheckIdentities will only accept the statement if at
+	// least one verified signer matches one of these (OR'ed). An empty list
+	// is the default and skips identity matching.
 	ExpectedSigners []*sapi.Identity
 
-	// ForceTrack overrides the catalog's predicate-type → track
+	// ForceTrack overrides the catalog's predicate-type to track
 	// resolution. Empty means "auto" (the catalog must associate the
 	// predicate type with exactly one track). When set to a track
-	// constant (TrackBuild / TrackSource / etc.), the verifier evaluates
+	// constant (TrackBuild/TrackSource), the verifier evaluates
 	// against that track and errors if the catalog does not classify the
 	// predicate type under it.
 	ForceTrack controls.Track
@@ -98,6 +96,14 @@ type VerificationOptions struct {
 	// project URL; consumer applications embedding the verifier should set
 	// their own identity. Empty by default.
 	VerifierID string
+
+	// SpecVersion selects the SLSA spec version whose verification
+	// criteria (control catalog) the statement is evaluated against,
+	// eg "1.2". Criteria carry forward across releases, so the newest
+	// catalog at or below the requested version applies. Empty (the
+	// default) means the latest version the catalog defines for the
+	// resolved track.
+	SpecVersion string
 
 	// MinLevel is the SLSA level the attestation is required to reach.
 	// When set (> 0), core controls declared above it are informative:
@@ -146,7 +152,7 @@ func WithRequireSignatures(required bool) VerificationOption {
 }
 
 // WithExpectedSigner appends an expected signer identity. Calling this
-// option multiple times accumulates entries (OR matched).
+// option multiple times accumulates entries (OR 'ed).
 func WithExpectedSigner(id *sapi.Identity) VerificationOption {
 	return func(o *VerificationOptions) error {
 		if id == nil {
@@ -167,7 +173,7 @@ func WithExpectedSigners(ids []*sapi.Identity) VerificationOption {
 
 // WithTrack forces the verifier to evaluate the statement against the
 // given track regardless of how the catalog classifies the predicate
-// type. The empty value means "auto" — fall back to catalog-driven
+// type. The empty value means "auto" and falls back to catalog-driven
 // resolution. Pass controls.TrackBuild or controls.TrackSource (or any
 // future track) explicitly.
 func WithTrack(track controls.Track) VerificationOption {
@@ -205,6 +211,17 @@ func WithParams(params map[string]any) VerificationOption {
 	}
 }
 
+// WithSpecVersion selects the SLSA spec version whose verification
+// criteria the statement is evaluated against (e.g. "1.2" or "v1.2").
+// The newest catalog at or below the requested version applies. An
+// empty string (default) selects the latest available.
+func WithSpecVersion(version string) VerificationOption {
+	return func(o *VerificationOptions) error {
+		o.SpecVersion = version
+		return nil
+	}
+}
+
 // WithMinLevel sets the SLSA level the attestation must reach for the
 // verification to pass. Core controls declared above the minimum level
 // become informative: when they fail they cap the computed SLSA level
@@ -220,7 +237,7 @@ func WithMinLevel(level int) VerificationOption {
 // WithVerifierID sets the identity of the entity performing the
 // verification. It is recorded on the Result and used as verifier.id when
 // a VSA is emitted. Consumer applications embedding the verifier should
-// set their own identity here; the CLI sets the slsa-verifier project URL.
+// set their own identity here, the CLI sets the slsa-verifier project URL.
 func WithVerifierID(id string) VerificationOption {
 	return func(o *VerificationOptions) error {
 		o.VerifierID = id
