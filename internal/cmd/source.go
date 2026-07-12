@@ -9,6 +9,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/carabiner-dev/collector/envelope"
 	sapi "github.com/carabiner-dev/signer/api/v1"
@@ -58,6 +59,18 @@ type sourceOptions struct {
 	// verified against; empty means the latest the catalog defines.
 	Spec string
 
+	// ExpectedRepo and ExpectedBranch state the expected origin of the
+	// revision (spec step 2). They feed the expected_source_repo and
+	// expected_branch control params; when unset those checks are
+	// skipped.
+	ExpectedRepo   string
+	ExpectedBranch string
+
+	// Since requires every control to have been active since at or
+	// before the given date (RFC3339 or YYYY-MM-DD). It feeds the
+	// enforced_since control param.
+	Since string
+
 	// Official toggles verification against the official SLSA
 	// source-actions signing identity. Implies --require-signatures.
 	Official bool
@@ -74,12 +87,23 @@ func (o *sourceOptions) AddFlags(cmd *cobra.Command) {
 	o.vsaOutputOptions.AddFlags(cmd)
 	cmd.PersistentFlags().StringVar(
 		&o.Level, "level", "1",
-		"required SLSA source level, e.g. 3 or SLSA_SOURCE_LEVEL_3 "+
-			"(controls above it are informative; 0 requires every control to pass)",
+		"required SLSA source level (eg 3 or SLSA_SOURCE_LEVEL_3)",
 	)
 	cmd.PersistentFlags().StringVar(
 		&o.Spec, "spec", "",
-		"SLSA spec version to verify against, e.g. 1.2 (default: latest)",
+		"SLSA spec version to verify against (eg 1.2) defaults to the latest",
+	)
+	cmd.PersistentFlags().StringVar(
+		&o.ExpectedRepo, "expected-repo", "",
+		"expected repository URI, eg https://github.com/example/repo",
+	)
+	cmd.PersistentFlags().StringVar(
+		&o.ExpectedBranch, "expected-branch", "",
+		"expected branch ref, eg refs/heads/main",
+	)
+	cmd.PersistentFlags().StringVar(
+		&o.Since, "since", "",
+		"require controls active since at or before this date (RFC3339 or YYYY-MM-DD)",
 	)
 	cmd.PersistentFlags().BoolVar(
 		&o.Official, "official", false,
@@ -111,6 +135,22 @@ func (o *sourceOptions) Validate() error {
 		errs = append(errs, err)
 	}
 	o.MinLevel = level
+	// The expectation flags feed the control params the source catalog
+	// reads. They take precedence over an equivalent --param entry.
+	if o.ExpectedRepo != "" {
+		o.shared.Params["expected_source_repo"] = o.ExpectedRepo
+	}
+	if o.ExpectedBranch != "" {
+		o.shared.Params["expected_branch"] = o.ExpectedBranch
+	}
+	if o.Since != "" {
+		since, sErr := parseSinceDate(o.Since)
+		if sErr != nil {
+			errs = append(errs, sErr)
+		} else {
+			o.shared.Params["enforced_since"] = since
+		}
+	}
 	if o.Official {
 		for _, san := range officialSourceSANs {
 			id, err := sapi.NewIdentityFromSpec(
@@ -129,6 +169,21 @@ func (o *sourceOptions) Validate() error {
 		o.shared.RequireSignatures = true
 	}
 	return errors.Join(errs...)
+}
+
+// parseSinceDate parses the --since flag value — an RFC3339 timestamp
+// or a bare YYYY-MM-DD date — and normalises it to RFC3339 (a bare date
+// means midnight UTC) so the CEL timestamp() conversion in the control
+// expressions always succeeds.
+func parseSinceDate(value string) (string, error) {
+	value = strings.TrimSpace(value)
+	if t, err := time.Parse(time.RFC3339, value); err == nil {
+		return t.UTC().Format(time.RFC3339), nil
+	}
+	if t, err := time.Parse(time.DateOnly, value); err == nil {
+		return t.UTC().Format(time.RFC3339), nil
+	}
+	return "", fmt.Errorf("invalid --since date %q (want RFC3339 or YYYY-MM-DD)", value)
 }
 
 // parseSourceLevel parses the --level flag value: a bare number (0-4)
@@ -164,12 +219,19 @@ with --level (default 1), controls above it still run and determine
 the SLSA source level reported (and emitted with --vsa), but do not
 fail the verification.
 
-State your expectations about the origin with --param expected_source_repo:<uri>
-and --param expected_branch:<ref>. --param enforced_since:<RFC3339> additionally
-requires every control to have been active since at or before that date.`,
+State your expectations about the origin with --expected-repo and
+--expected-branch. --since additionally requires every control to have
+been active since at or before that date.
+
+Signer identities (--signer) are spec strings of the form
+sigstore::<issuer>::<identity>, matched exactly, or
+sigstore(identityMatch=regex)::<issuer>::<identity-regexp>:
+
+  sigstore::https://accounts.google.com::user@example.com
+  sigstore(identityMatch=regex)::https://token.actions.githubusercontent.com::.*@example/.*`,
 		Use: "source <attestation-path>",
 		Example: fmt.Sprintf(
-			`%s source --level 3 --official --param expected_branch:refs/heads/main source-provenance.json`,
+			`%s source --level 3 --official --expected-branch refs/heads/main source-provenance.json`,
 			appname,
 		),
 		SilenceUsage:  false,

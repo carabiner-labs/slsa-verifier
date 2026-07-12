@@ -35,10 +35,8 @@ func (so *signingOptions) Config() *command.OptionsSetConfig {
 			Flags: map[string]command.FlagConfig{
 				"signer": {
 					Long: "signer",
-					Help: "expected signer identity as a spec string (repeatable; OR matched). " +
-						"Implies --require-signatures. Examples: " +
-						"'sigstore::https://accounts.google.com::user@example.com', " +
-						"'sigstore(identityMatch=regex)::https://token.actions.githubusercontent.com::.*@example/.*'",
+					Help: "expected signer identity as a spec string " +
+						"(OR'ed; implies --require-signatures)",
 				},
 			},
 		}

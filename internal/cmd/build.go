@@ -87,7 +87,14 @@ build-track controls and any user-supplied controls.
 
 The attestation may be supplied as a plain in-toto statement, a DSSE
 envelope (signed with one or more keys via --key), or a Sigstore
-bundle.`,
+bundle.
+
+Signer identities (--signer) are spec strings of the form
+sigstore::<issuer>::<identity>, matched exactly, or
+sigstore(identityMatch=regex)::<issuer>::<identity-regexp>:
+
+  sigstore::https://accounts.google.com::user@example.com
+  sigstore(identityMatch=regex)::https://token.actions.githubusercontent.com::.*@example/.*`,
 		Use: "build <attestation-path>",
 		Example: fmt.Sprintf(
 			`%s build --param=expected_source:git+https://example.com/repo provenance.intoto.json`,
