@@ -60,6 +60,52 @@ func TestSourceOptionsOfficialAddsIdentities(t *testing.T) {
 	assert.Equal(t, 1, opts.MinLevel)
 }
 
+func TestParseSinceDate(t *testing.T) {
+	t.Parallel()
+
+	got, err := parseSinceDate("2025-08-01T10:30:00Z")
+	require.NoError(t, err)
+	assert.Equal(t, "2025-08-01T10:30:00Z", got)
+
+	got, err = parseSinceDate("2025-08-01")
+	require.NoError(t, err)
+	assert.Equal(t, "2025-08-01T00:00:00Z", got)
+
+	_, err = parseSinceDate("August 1st")
+	assert.Error(t, err)
+	_, err = parseSinceDate("2025-13-45")
+	assert.Error(t, err)
+}
+
+func TestSourceOptionsExpectationFlagsFeedParams(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), "att.json")
+	require.NoError(t, os.WriteFile(path, []byte("{}"), 0o600))
+
+	opts := &sourceOptions{
+		shared:          &sharedOptions{},
+		AttestationPath: path,
+		Level:           "1",
+		ExpectedRepo:    "https://github.com/example/repo",
+		ExpectedBranch:  "refs/heads/main",
+		Since:           "2025-01-01",
+	}
+	require.NoError(t, opts.Validate())
+	assert.Equal(t, "https://github.com/example/repo", opts.shared.Params["expected_source_repo"])
+	assert.Equal(t, "refs/heads/main", opts.shared.Params["expected_branch"])
+	assert.Equal(t, "2025-01-01T00:00:00Z", opts.shared.Params["enforced_since"])
+
+	// The dedicated flags win over equivalent --param entries.
+	opts.shared.Raw = []string{"expected_branch:refs/heads/other"}
+	require.NoError(t, opts.Validate())
+	assert.Equal(t, "refs/heads/main", opts.shared.Params["expected_branch"])
+
+	// A malformed --since is a validation error.
+	opts.Since = "not a date"
+	assert.Error(t, opts.Validate())
+}
+
 func TestSourceOptionsValidateLevel(t *testing.T) {
 	t.Parallel()
 
