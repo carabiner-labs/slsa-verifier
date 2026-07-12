@@ -160,9 +160,9 @@ func TestVerifyV01FixtureReachesLevel3(t *testing.T) {
 }
 
 // TestVerifySourceFixtureReachesLevel4 confirms the source fixture
-// passes every SourceCore control (L1 identity + L2/L3/L4 named
-// controls) and reaches Level 4. Also confirms BuildType is empty for
-// source statements (the gating fix).
+// passes every SourceCore control (L1 expectation checks + the 13
+// SLSA_SOURCE_* named controls) and reaches Level 4. Also confirms
+// BuildType is empty for source statements (the gating fix).
 func TestVerifySourceFixtureReachesLevel4(t *testing.T) {
 	t.Parallel()
 
@@ -184,6 +184,76 @@ func TestVerifySourceFixtureReachesLevel4(t *testing.T) {
 	// Source statements get no BuildType controls.
 	assert.Empty(t, res.BuildTypeResults, "source statements should produce no BuildType results")
 
-	// Confirm we ran all six source/core controls.
-	assert.Len(t, res.CoreResults, 6)
+	// 13 named source controls + the 2 expectation checks.
+	assert.Len(t, res.CoreResults, 15)
+}
+
+// TestVerifySourceFixtureWithoutParams confirms the expectation checks
+// (expected_source_repo / expected_branch) are skipped — not errored —
+// when the caller states no expectations, and the level still computes.
+func TestVerifySourceFixtureWithoutParams(t *testing.T) {
+	t.Parallel()
+
+	stmt := loadFixture(t, "source.intoto.json")
+	v, err := slsa.New()
+	require.NoError(t, err)
+
+	res, err := v.Verify(context.Background(), stmt)
+	require.NoError(t, err)
+	require.NotNil(t, res)
+	assert.Equal(t, slsa.StatusPass, res.Status)
+	assert.Equal(t, 4, res.SLSALevel)
+
+	skipped := 0
+	for _, cr := range res.CoreResults {
+		if cr.Status == slsa.StatusSkipped {
+			skipped++
+		}
+	}
+	assert.Equal(t, 2, skipped, "both expectation checks should be skipped")
+}
+
+// TestVerifySourceFixtureEnforcedSince confirms the enforced_since param
+// fails controls activated after the given date: the fixture's
+// two-party review control (since 2025-12-01) drops off, capping the
+// level at 3, and the run fails unless MinLevel makes L4 informative.
+func TestVerifySourceFixtureEnforcedSince(t *testing.T) {
+	t.Parallel()
+
+	stmt := loadFixture(t, "source.intoto.json")
+	v, err := slsa.New()
+	require.NoError(t, err)
+
+	// Strict (MinLevel unset): the failing L4 control fails the run.
+	res, err := v.Verify(
+		context.Background(),
+		stmt,
+		slsa.WithParam("enforced_since", "2025-08-01T00:00:00Z"),
+	)
+	require.NoError(t, err)
+	assert.Equal(t, slsa.StatusFail, res.Status)
+	assert.Equal(t, 3, res.SLSALevel)
+
+	// With MinLevel 3 the L4 control is informative: PASS at level 3.
+	res, err = v.Verify(
+		context.Background(),
+		stmt,
+		slsa.WithParam("enforced_since", "2025-08-01T00:00:00Z"),
+		slsa.WithMinLevel(3),
+	)
+	require.NoError(t, err)
+	assert.Equal(t, slsa.StatusPass, res.Status)
+	assert.Equal(t, 3, res.SLSALevel)
+
+	// An enforcement date before every control's continuity window
+	// cuts deeper: 2025-07-01 predates the L2 continuity control.
+	res, err = v.Verify(
+		context.Background(),
+		stmt,
+		slsa.WithParam("enforced_since", "2025-07-01T00:00:00Z"),
+		slsa.WithMinLevel(1),
+	)
+	require.NoError(t, err)
+	assert.Equal(t, slsa.StatusPass, res.Status)
+	assert.Equal(t, 1, res.SLSALevel)
 }

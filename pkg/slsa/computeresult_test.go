@@ -123,6 +123,65 @@ func TestComputeResultErrorTreatedAsFail(t *testing.T) {
 	assert.Equal(t, 0, r.SLSALevel)
 }
 
+func TestComputeResultMinLevel(t *testing.T) {
+	t.Parallel()
+
+	impl := &defaultImplementation{}
+
+	// A failing core control above MinLevel is informative: the run
+	// passes and the failing level caps the computed SLSA level.
+	r, err := impl.ComputeResult(
+		&VerificationOptions{MinLevel: 3},
+		[]*ControlResult{pass("a", 1), pass("b", 2), pass("c", 3), fail("d", 4)},
+		nil,
+		nil,
+	)
+	require.NoError(t, err)
+	assert.Equal(t, StatusPass, r.Status)
+	assert.Equal(t, 3, r.SLSALevel)
+
+	// A failing core control at or below MinLevel still fails the run.
+	r, err = impl.ComputeResult(
+		&VerificationOptions{MinLevel: 3},
+		[]*ControlResult{pass("a", 1), pass("b", 2), fail("c", 3), fail("d", 4)},
+		nil,
+		nil,
+	)
+	require.NoError(t, err)
+	assert.Equal(t, StatusFail, r.Status)
+	assert.Equal(t, 2, r.SLSALevel)
+
+	// Core controls without a declared level are always required.
+	r, err = impl.ComputeResult(
+		&VerificationOptions{MinLevel: 3},
+		[]*ControlResult{pass("a", 1), fail("unleveled", 0)},
+		nil,
+		nil,
+	)
+	require.NoError(t, err)
+	assert.Equal(t, StatusFail, r.Status)
+
+	// BuildType and user controls are always required too.
+	r, err = impl.ComputeResult(
+		&VerificationOptions{MinLevel: 3},
+		[]*ControlResult{pass("a", 1)},
+		nil,
+		[]*ControlResult{fail("user", 4)},
+	)
+	require.NoError(t, err)
+	assert.Equal(t, StatusFail, r.Status)
+
+	// MinLevel zero keeps the strict semantics.
+	r, err = impl.ComputeResult(
+		&VerificationOptions{MinLevel: 0},
+		[]*ControlResult{pass("a", 1), fail("d", 4)},
+		nil,
+		nil,
+	)
+	require.NoError(t, err)
+	assert.Equal(t, StatusFail, r.Status)
+}
+
 func TestComputeResultAllEmpty(t *testing.T) {
 	t.Parallel()
 

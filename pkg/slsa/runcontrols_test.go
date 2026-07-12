@@ -200,6 +200,38 @@ func TestRunControlsMissingParam(t *testing.T) {
 	assert.Contains(t, results[0].Message, "expected_source")
 }
 
+func TestRunControlsMissingOptionalParamSkips(t *testing.T) {
+	t.Parallel()
+
+	impl := newDefaultImpl(t)
+	stmt := newProvV1Stmt(t, "git+https://example.com/repo")
+
+	ctrls := []*controls.Control{{
+		ID:    "source-repo-match",
+		Title: "Source repo match",
+		Checks: []controls.Check{{
+			PredicateType:      eval.PredicateProvenanceV1,
+			Expression:         "predicate.buildDefinition.externalParameters.source == params.expected_source",
+			OptionalParameters: []string{"expected_source"},
+		}},
+	}}
+
+	// Without the param the check is skipped, not errored.
+	opts := &VerificationOptions{Params: map[string]any{}}
+	results, err := impl.RunControls(context.Background(), opts, ctrls, stmt)
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	assert.Equal(t, StatusSkipped, results[0].Status)
+	assert.Contains(t, results[0].Message, "expected_source")
+
+	// With the param provided the check evaluates normally.
+	opts = &VerificationOptions{Params: map[string]any{"expected_source": "git+https://example.com/repo"}}
+	results, err = impl.RunControls(context.Background(), opts, ctrls, stmt)
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	assert.Equal(t, StatusPass, results[0].Status)
+}
+
 func TestRunControlsSkipsControlWithoutMatchingPredicate(t *testing.T) {
 	t.Parallel()
 
