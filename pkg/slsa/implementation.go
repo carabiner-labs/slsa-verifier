@@ -138,10 +138,8 @@ func (*defaultImplementation) CheckIdentities(_ context.Context, opts *Verificat
 		return ErrSignatureRequired
 	}
 
-	for _, expected := range opts.ExpectedSigners {
-		if sv.MatchesIdentity(expected) {
-			return nil
-		}
+	if slices.ContainsFunc(opts.ExpectedSigners, sv.MatchesIdentity) {
+		return nil
 	}
 	return ErrIdentityMismatch
 }
@@ -266,6 +264,16 @@ func (d *defaultImplementation) evaluateControl(
 			return cr
 		}
 	}
+	// Optional parameters gate the check rather than the run: without
+	// them the expression can't be evaluated, but the caller chose not
+	// to state that expectation, so the control is skipped.
+	for _, p := range match.OptionalParameters {
+		if _, ok := params[p]; !ok {
+			cr.Status = StatusSkipped
+			cr.Message = fmt.Sprintf("param %q not provided", p)
+			return cr
+		}
+	}
 
 	pass, err := d.evaluator.Evaluate(predicateType, match.Expression, predicate, subjects, params)
 	switch {
@@ -282,7 +290,9 @@ func (d *defaultImplementation) evaluateControl(
 
 // ComputeResult rolls up the per-layer control results into the final
 // verification result. Status is PASS only when no control failed or
-// errored across all three layers. The SLSA level is the highest
+// errored across all three layers; with opts.MinLevel set, core controls
+// declared above the minimum level are informative and their failure
+// only caps the computed level. The SLSA level is the highest
 // consecutive level (1..4) for which every core control declaring that
 // level passed; levels with no declared controls are skipped (treated as
 // trivially achieved as long as the chain is unbroken).
@@ -293,20 +303,33 @@ func (*defaultImplementation) ComputeResult(opts *VerificationOptions, coreResul
 		BuildTypeResults: buildTypeResults,
 		UserResults:      userResults,
 	}
+	minLevel := 0
 	if opts != nil {
 		r.VerifierID = opts.VerifierID
+		minLevel = opts.MinLevel
 	}
 
-	for _, layer := range [][]*ControlResult{coreResults, buildTypeResults, userResults} {
-		for _, cr := range layer {
-			if cr.Status == StatusPass || cr.Status == StatusSkipped {
-				continue
-			}
-			r.Status = StatusFail
-			break
+	for _, cr := range coreResults {
+		if cr.Status == StatusPass || cr.Status == StatusSkipped {
+			continue
 		}
+		// Leveled core controls above the required minimum cap the
+		// computed level instead of failing the verification.
+		if minLevel > 0 && cr.SLSALevel > minLevel {
+			continue
+		}
+		r.Status = StatusFail
+		break
+	}
+	for _, layer := range [][]*ControlResult{buildTypeResults, userResults} {
 		if r.Status == StatusFail {
 			break
+		}
+		for _, cr := range layer {
+			if cr.Status != StatusPass && cr.Status != StatusSkipped {
+				r.Status = StatusFail
+				break
+			}
 		}
 	}
 
