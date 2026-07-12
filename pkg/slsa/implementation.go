@@ -52,7 +52,7 @@ type VerifierImplementation interface {
 	CheckIdentities(ctx context.Context, opts *VerificationOptions, statement attestation.Statement) error
 
 	// ResolveCategory selects which catalog category to apply by looking
-	// up the statement's predicate-type track in the catalog (layer 3 —
+	// up the statement's predicate-type track in the catalog (layer 3
 	// split build vs source). Honours opts.ForceTrack when set.
 	ResolveCategory(opts *VerificationOptions, catalog *controls.Catalog, statement attestation.Statement) (controls.Category, error)
 
@@ -113,9 +113,8 @@ func (*defaultImplementation) VerifySignatures(_ context.Context, opts *Verifica
 // list it is a no-op, preserving the previous behaviour. With one or
 // more expected identities it requires the statement to carry a verified
 // signature; an unsigned statement returns ErrSignatureRequired and a
-// signed-but-non-matching statement returns ErrIdentityMismatch. OR
-// semantics — any one expected signer matching any verified identity
-// passes.
+// signed-but-non-matching statement returns ErrIdentityMismatch. These are
+// OR'ed: any expected signer matching a verified identity passes.
 func (*defaultImplementation) CheckIdentities(_ context.Context, opts *VerificationOptions, statement attestation.Statement) error {
 	if len(opts.ExpectedSigners) == 0 {
 		return nil
@@ -145,15 +144,22 @@ func (*defaultImplementation) CheckIdentities(_ context.Context, opts *Verificat
 }
 
 // ResolveCategory routes the statement to a catalog category. The track
-// resolution honours opts.ForceTrack when set; otherwise the catalog
-// must associate the predicate type with exactly one track, else
-// resolution errors with a "track required" hint.
+// resolution honours opts.ForceTrack when set or otherwise the catalog
+// must associate the predicate type with exactly one track. If it matches
+// more the resolution errors with "track required". Within the track, the
+// core category is selected by opts.SpecVersion to the newest catalog at
+// or below the requested SLSA spec version (empty means latest).
 func (*defaultImplementation) ResolveCategory(opts *VerificationOptions, catalog *controls.Catalog, stmt attestation.Statement) (controls.Category, error) {
 	track, err := resolveTrack(opts, catalog, stmt)
 	if err != nil {
 		return "", err
 	}
-	return controls.Category(string(track) + "/core"), nil
+	spec := ""
+	if opts != nil {
+		spec = opts.SpecVersion
+	}
+	category, _, err := catalog.ResolveCore(track, spec)
+	return category, err
 }
 
 func (*defaultImplementation) SelectCoreControls(_ *VerificationOptions, catalog *controls.Catalog, category controls.Category) []*controls.Control {
@@ -161,9 +167,9 @@ func (*defaultImplementation) SelectCoreControls(_ *VerificationOptions, catalog
 }
 
 // SelectBuildTypeControls returns the catalog entries under
-// "<track>/buildType" for the statement's resolved track. For source
+// track/buildType for the statement's resolved track. For source
 // statements the looked-up category ("source/buildType") simply doesn't
-// exist in the catalog, so the layer naturally stays empty.
+// exist in the catalog, so the layer stays empty.
 func (*defaultImplementation) SelectBuildTypeControls(opts *VerificationOptions, catalog *controls.Catalog, stmt attestation.Statement) []*controls.Control {
 	track, err := resolveTrack(opts, catalog, stmt)
 	if err != nil {
@@ -176,7 +182,8 @@ func (*defaultImplementation) SelectBuildTypeControls(opts *VerificationOptions,
 // opts.ForceTrack set, the forced track must be one of the catalog's
 // known tracks for the predicate type, else an error. With ForceTrack
 // empty, the predicate type must be associated with exactly one track
-// in the catalog; multi-track predicates require disambiguation.
+// in the catalog. Predicates that apply to more than one track require
+// disambiguation.
 func resolveTrack(opts *VerificationOptions, catalog *controls.Catalog, stmt attestation.Statement) (controls.Track, error) {
 	pt := string(stmt.GetPredicateType())
 	tracks := catalog.TracksOf(pt)
@@ -196,7 +203,7 @@ func resolveTrack(opts *VerificationOptions, catalog *controls.Catalog, stmt att
 	}
 	if len(tracks) > 1 {
 		return "", fmt.Errorf(
-			"predicate type %q is associated with multiple tracks %v — set --track to disambiguate",
+			"predicate type %q is associated with multiple tracks %v: set --track to disambiguate",
 			pt, tracks,
 		)
 	}
@@ -209,7 +216,7 @@ func (*defaultImplementation) SelectUserControls(opts *VerificationOptions) []*c
 
 // RunControls evaluates every control in the input list and returns one
 // ControlResult per control. Controls whose checks don't match the
-// statement's predicateType / buildType produce a StatusSkipped result
+// statement's predicateType/buildType produce a StatusSkipped result
 // (rather than being dropped) so the caller can render a complete
 // roster.
 func (d *defaultImplementation) RunControls(_ context.Context, opts *VerificationOptions, ctrls []*controls.Control, statement attestation.Statement) ([]*ControlResult, error) {
@@ -341,9 +348,9 @@ const maxSLSALevel = 4
 
 // computeSLSALevel returns the highest consecutive level (1..maxSLSALevel)
 // for which every applicable core control declaring that level passed.
-// Levels with no declared controls — or where every declared control
-// was skipped — are passed through transparently: they neither raise
-// nor break the chain.
+// Levels with no declared controls (or where every declared control
+// was skipped) are passed through transparently and they dont raise
+// or break the chain.
 func computeSLSALevel(coreResults []*ControlResult) int {
 	byLevel := map[int][]*ControlResult{}
 	for _, cr := range coreResults {
@@ -383,9 +390,8 @@ func computeSLSALevel(coreResults []*ControlResult) int {
 }
 
 // extractPredicate returns the parsed proto message carried by the
-// statement's predicate. The collector wiring is
-// responsible for populating this field with one of the registered
-// SLSA proto messages.
+// statement's predicate. The collector wiring is responsible for
+// populating this field with one of the registered SLSA proto messages.
 func extractPredicate(stmt attestation.Statement) (proto.Message, error) {
 	p := stmt.GetPredicate()
 	if p == nil {

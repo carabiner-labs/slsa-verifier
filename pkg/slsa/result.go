@@ -45,6 +45,12 @@ type Result struct {
 	// as verifier.id when a VSA is emitted from this result.
 	VerifierID string
 
+	// SpecVersion is the SLSA spec version whose criteria the statement
+	// was evaluated against which is the version the requested SpecVersion
+	// resolved to in the catalog (eg "1.2"). It surfaces as
+	// slsaVersion when a VSA is emitted from this result.
+	SpecVersion string
+
 	// CoreResults holds per-control results for the SLSA spec-defined controls.
 	CoreResults []*ControlResult
 

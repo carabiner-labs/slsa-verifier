@@ -114,5 +114,10 @@ func (v *Verifier) Verify(ctx context.Context, statement attestation.Statement, 
 	if err != nil {
 		return nil, fmt.Errorf("computing result: %w", err)
 	}
+	if result != nil {
+		// Record the spec version the core category resolved to so
+		// callers (and emitted VSAs) can state which criteria applied.
+		result.SpecVersion = controls.SpecVersionOf(category)
+	}
 	return result, nil
 }
