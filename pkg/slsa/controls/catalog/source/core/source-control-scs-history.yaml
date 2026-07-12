@@ -1,0 +1,18 @@
+# SPDX-FileCopyrightText: Copyright 2026 The SLSA Authors
+# SPDX-License-Identifier: Apache-2.0
+---
+track: source
+id: source-control-scs-history
+title: Source Provenance Declares SLSA_SOURCE_SCS_HISTORY
+description: |
+  Asserts the source provenance lists the SLSA_SOURCE_SCS_HISTORY
+  control as active before the provenance was issued. Required for
+  SLSA Source L2 — the source control system preserves the full
+  history of changes to protected branches.
+slsaLevel: 2
+checks:
+  - predicateType: https://github.com/slsa-framework/slsa-source-poc/source-provenance/v1-draft
+    expression: >-
+      predicate.controls.exists(c, c.name == "SLSA_SOURCE_SCS_HISTORY"
+      && c.since <= predicate.createdOn
+      && (!('enforced_since' in params) || c.since <= timestamp(string(params.enforced_since))))

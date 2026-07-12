@@ -1,0 +1,19 @@
+# SPDX-FileCopyrightText: Copyright 2026 The SLSA Authors
+# SPDX-License-Identifier: Apache-2.0
+---
+track: source
+id: source-control-org-continuity
+title: Source Provenance Declares SLSA_SOURCE_ORG_CONTINUITY
+description: |
+  Asserts the source provenance lists the SLSA_SOURCE_ORG_CONTINUITY
+  control as active before the provenance was issued. Required for
+  SLSA Source L3 — the organization commits to keeping the continuity
+  controls enabled, so protections cannot be silently dropped and
+  re-enabled.
+slsaLevel: 3
+checks:
+  - predicateType: https://github.com/slsa-framework/slsa-source-poc/source-provenance/v1-draft
+    expression: >-
+      predicate.controls.exists(c, c.name == "SLSA_SOURCE_ORG_CONTINUITY"
+      && c.since <= predicate.createdOn
+      && (!('enforced_since' in params) || c.since <= timestamp(string(params.enforced_since))))

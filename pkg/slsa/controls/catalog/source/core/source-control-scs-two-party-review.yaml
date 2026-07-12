@@ -1,0 +1,18 @@
+# SPDX-FileCopyrightText: Copyright 2026 The SLSA Authors
+# SPDX-License-Identifier: Apache-2.0
+---
+track: source
+id: source-control-scs-two-party-review
+title: Source Provenance Declares SLSA_SOURCE_SCS_TWO_PARTY_REVIEW
+description: |
+  Asserts the source provenance lists the SLSA_SOURCE_SCS_TWO_PARTY_REVIEW
+  control (or its deprecated alias REVIEW_ENFORCED) as active before the
+  provenance was issued. Required for SLSA Source L4 — every change is
+  reviewed by an authenticated person other than its author.
+slsaLevel: 4
+checks:
+  - predicateType: https://github.com/slsa-framework/slsa-source-poc/source-provenance/v1-draft
+    expression: >-
+      predicate.controls.exists(c, c.name in ["SLSA_SOURCE_SCS_TWO_PARTY_REVIEW", "REVIEW_ENFORCED"]
+      && c.since <= predicate.createdOn
+      && (!('enforced_since' in params) || c.since <= timestamp(string(params.enforced_since))))

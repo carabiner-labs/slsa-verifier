@@ -1,0 +1,18 @@
+# SPDX-FileCopyrightText: Copyright 2026 The SLSA Authors
+# SPDX-License-Identifier: Apache-2.0
+---
+track: source
+id: source-control-org-access-control
+title: Source Provenance Declares SLSA_SOURCE_ORG_ACCESS_CONTROL
+description: |
+  Asserts the source provenance lists the SLSA_SOURCE_ORG_ACCESS_CONTROL
+  control as active before the provenance was issued. Required for SLSA
+  Source L2 — the organization controls who may modify the repository
+  and its protected refs.
+slsaLevel: 2
+checks:
+  - predicateType: https://github.com/slsa-framework/slsa-source-poc/source-provenance/v1-draft
+    expression: >-
+      predicate.controls.exists(c, c.name == "SLSA_SOURCE_ORG_ACCESS_CONTROL"
+      && c.since <= predicate.createdOn
+      && (!('enforced_since' in params) || c.since <= timestamp(string(params.enforced_since))))
