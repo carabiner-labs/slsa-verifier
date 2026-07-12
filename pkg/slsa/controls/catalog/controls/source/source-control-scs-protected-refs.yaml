@@ -9,7 +9,6 @@ description: |
   control as active before the provenance was issued. Required for SLSA
   Source L3 — the source control system enforces the configured
   protection rules on protected refs.
-slsaLevel: 3
 checks:
   - predicateType: https://github.com/slsa-framework/slsa-source-poc/source-provenance/v1-draft
     expression: >-

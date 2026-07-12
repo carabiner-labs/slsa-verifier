@@ -13,7 +13,6 @@ description: |
     - v1.0: predicate.buildDefinition.resolvedDependencies (size > 0)
     - v0.2: predicate.materials (size > 0)
     - v0.1: predicate.materials (size > 0)
-slsaLevel: 3
 checks:
   - predicateType: https://slsa.dev/provenance/v1
     expression: predicate.buildDefinition.resolvedDependencies.size() > 0

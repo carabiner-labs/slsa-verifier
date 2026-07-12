@@ -14,7 +14,6 @@ description: |
     - v0.1: any predicate.materials[*].uri matches (v0.1 has no
       dedicated source-config field, so we accept the URI appearing
       anywhere in the materials list).
-slsaLevel: 1
 checks:
   - predicateType: https://slsa.dev/provenance/v1
     expression: predicate.buildDefinition.externalParameters.source == params.expected_source

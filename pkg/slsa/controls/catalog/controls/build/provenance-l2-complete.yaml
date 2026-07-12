@@ -15,7 +15,6 @@ description: |
     - v1.0: predicate.buildDefinition.buildType + predicate.runDetails.builder.id
     - v0.2: predicate.buildType + predicate.builder.id
     - v0.1: predicate.recipe.type + predicate.builder.id
-slsaLevel: 2
 checks:
   - predicateType: https://slsa.dev/provenance/v1
     expression: predicate.buildDefinition.buildType != "" && predicate.runDetails.builder.id != ""

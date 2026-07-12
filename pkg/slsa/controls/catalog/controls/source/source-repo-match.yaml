@@ -9,7 +9,6 @@ description: |
   repository URI. An identity check at L1 — equivalent to the
   source-repo-match control on the build side. Skipped when the caller
   does not state an expected repository.
-slsaLevel: 1
 checks:
   - predicateType: https://github.com/slsa-framework/slsa-source-poc/source-provenance/v1-draft
     expression: predicate.repoUri == params.expected_source_repo

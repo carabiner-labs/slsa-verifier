@@ -10,7 +10,6 @@ description: |
   SLSA Source L3 — the organization commits to keeping the continuity
   controls enabled, so protections cannot be silently dropped and
   re-enabled.
-slsaLevel: 3
 checks:
   - predicateType: https://github.com/slsa-framework/slsa-source-poc/source-provenance/v1-draft
     expression: >-

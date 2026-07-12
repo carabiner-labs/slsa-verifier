@@ -13,7 +13,6 @@ description: |
     - v1.0: predicate.runDetails.metadata.invocationId
     - v0.2: predicate.metadata.buildInvocationId
     - v0.1: predicate.metadata.buildInvocationId
-slsaLevel: 3
 checks:
   - predicateType: https://slsa.dev/provenance/v1
     expression: predicate.runDetails.metadata.invocationId != ""

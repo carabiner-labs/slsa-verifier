@@ -14,7 +14,6 @@ description: |
     - v1.0: predicate.runDetails.builder.id
     - v0.2: predicate.builder.id
     - v0.1: predicate.builder.id
-slsaLevel: 2
 checks:
   - predicateType: https://slsa.dev/provenance/v1
     expression: predicate.runDetails.builder.id in params.trusted_builders
