@@ -38,6 +38,12 @@ type Control struct {
 // Check binds a CEL expression to a specific in-toto predicate type along
 // with the names of parameters the expression expects to find on `params`.
 //
+// Parameters lists params the expression requires: evaluating the check
+// without one of them is an error. OptionalParameters lists params the
+// expression needs to run but that the caller may legitimately omit:
+// when one is missing the check is skipped instead of erroring, so the
+// control drops out of the roster without failing verification.
+//
 // BuildTypes, when set, narrows the check further to only fire when the
 // statement's build provenance buildType is one of the listed URIs
 // (OR-matched, exact). It is intended for controls under the
@@ -45,10 +51,11 @@ type Control struct {
 // builders. Leaving it empty makes the check apply to any buildType
 // whose predicateType matches.
 type Check struct {
-	PredicateType string   `yaml:"predicateType"`
-	Expression    string   `yaml:"expression"`
-	Parameters    []string `yaml:"parameters,omitempty"`
-	BuildTypes    []string `yaml:"buildTypes,omitempty"`
+	PredicateType      string   `yaml:"predicateType"`
+	Expression         string   `yaml:"expression"`
+	Parameters         []string `yaml:"parameters,omitempty"`
+	OptionalParameters []string `yaml:"optionalParameters,omitempty"`
+	BuildTypes         []string `yaml:"buildTypes,omitempty"`
 }
 
 // Validate checks the control's structural integrity. Cross-validation
