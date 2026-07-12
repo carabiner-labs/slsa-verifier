@@ -98,6 +98,14 @@ type VerificationOptions struct {
 	// project URL; consumer applications embedding the verifier should set
 	// their own identity. Empty by default.
 	VerifierID string
+
+	// MinLevel is the SLSA level the attestation is required to reach.
+	// When set (> 0), core controls declared above it are informative:
+	// their failure caps the computed level but does not fail the run.
+	// Zero (the default) keeps the strict semantics where every
+	// applicable control must pass. Controls without a declared level,
+	// buildType controls and user controls are always required.
+	MinLevel int
 }
 
 // DefaultVerificationOptions returns the default per-call options.
@@ -193,6 +201,18 @@ func WithParam(name string, value any) VerificationOption {
 func WithParams(params map[string]any) VerificationOption {
 	return func(o *VerificationOptions) error {
 		o.Params = params
+		return nil
+	}
+}
+
+// WithMinLevel sets the SLSA level the attestation must reach for the
+// verification to pass. Core controls declared above the minimum level
+// become informative: when they fail they cap the computed SLSA level
+// without failing the run. Zero (the default) requires every applicable
+// control to pass regardless of level.
+func WithMinLevel(level int) VerificationOption {
+	return func(o *VerificationOptions) error {
+		o.MinLevel = level
 		return nil
 	}
 }
