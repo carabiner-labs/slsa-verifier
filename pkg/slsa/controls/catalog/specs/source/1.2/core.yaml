@@ -11,6 +11,18 @@ controls:
     slsaLevel: 1
   - id: source-branch-match
     slsaLevel: 1
+  - id: source-tag-match
+    slsaLevel: 1
+  - id: source-tag-vsa-level-1
+    slsaLevel: 1
+  - id: source-tag-vsa-level-2
+    slsaLevel: 2
+  - id: source-tag-hygiene
+    slsaLevel: 2
+  - id: source-tag-vsa-level-3
+    slsaLevel: 3
+  - id: source-tag-vsa-level-4
+    slsaLevel: 4
   - id: source-control-org-scs
     slsaLevel: 1
   - id: source-control-scs-repo-id
