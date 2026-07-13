@@ -1,0 +1,9 @@
+# SPDX-FileCopyrightText: Copyright 2026 The SLSA Authors
+# SPDX-License-Identifier: Apache-2.0
+#
+# Custom buildType-specific controls for the build track. These are not
+# SLSA spec criteria, so the category is unversioned and entries carry
+# no level.
+---
+controls:
+  - id: example-test-builder-id
