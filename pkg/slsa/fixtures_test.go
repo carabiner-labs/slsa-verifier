@@ -79,6 +79,30 @@ func TestFixturesParseToExpectedProtoType(t *testing.T) {
 				return ok
 			},
 		},
+		{
+			name:        "tag.intoto.json",
+			predicateID: eval.PredicateTagProvenance,
+			wantPB: func(m proto.Message) bool {
+				_, ok := m.(*sourceprovenance.TagProvenancePred)
+				return ok
+			},
+		},
+		{
+			name:        "source-v1.intoto.json",
+			predicateID: eval.PredicateSourceProvenanceV1,
+			wantPB: func(m proto.Message) bool {
+				_, ok := m.(*sourceprovenance.SourceProvenancePred)
+				return ok
+			},
+		},
+		{
+			name:        "tag-v1.intoto.json",
+			predicateID: eval.PredicateTagProvenanceV1,
+			wantPB: func(m proto.Message) bool {
+				_, ok := m.(*sourceprovenance.TagProvenancePred)
+				return ok
+			},
+		},
 	}
 
 	for _, tc := range cases {
@@ -184,8 +208,9 @@ func TestVerifySourceFixtureReachesLevel4(t *testing.T) {
 	// Source statements get no BuildType controls.
 	assert.Empty(t, res.BuildTypeResults, "source statements should produce no BuildType results")
 
-	// 13 named source controls + the 2 expectation checks.
-	assert.Len(t, res.CoreResults, 15)
+	// 13 named source controls + 3 expectation checks + 5 tag controls
+	// (the tag entries report as skipped on branch provenance).
+	assert.Len(t, res.CoreResults, 21)
 }
 
 // TestVerifySourceFixtureWithoutParams confirms the expectation checks
@@ -204,13 +229,110 @@ func TestVerifySourceFixtureWithoutParams(t *testing.T) {
 	assert.Equal(t, slsa.StatusPass, res.Status)
 	assert.Equal(t, 4, res.SLSALevel)
 
-	skipped := 0
 	for _, cr := range res.CoreResults {
-		if cr.Status == slsa.StatusSkipped {
-			skipped++
+		if cr.ID == "source-repo-match" || cr.ID == "source-branch-match" {
+			assert.Equal(t, slsa.StatusSkipped, cr.Status,
+				"expectation check %s should be skipped without params", cr.ID)
 		}
 	}
-	assert.Equal(t, 2, skipped, "both expectation checks should be skipped")
+}
+
+// TestVerifyFinalPredicateTypes confirms the final (non-draft) source
+// and tag predicate types are verified exactly like the draft versions.
+func TestVerifyFinalPredicateTypes(t *testing.T) {
+	t.Parallel()
+
+	v, err := slsa.New()
+	require.NoError(t, err)
+
+	res, err := v.Verify(context.Background(), loadFixture(t, "source-v1.intoto.json"))
+	require.NoError(t, err)
+	assert.Equal(t, slsa.StatusPass, res.Status)
+	assert.Equal(t, 4, res.SLSALevel)
+
+	res, err = v.Verify(
+		context.Background(),
+		loadFixture(t, "tag-v1.intoto.json"),
+		slsa.WithMinLevel(1),
+		slsa.WithParam("expected_tag", "v1.2.3"),
+	)
+	require.NoError(t, err)
+	assert.Equal(t, slsa.StatusPass, res.Status)
+	assert.Equal(t, 3, res.SLSALevel)
+}
+
+// TestVerifyTagFixture confirms tag provenance verification: the tag
+// inherits the level attested by the VSA summaries of the tagged
+// commit, gated by the tag hygiene control at L2, and the expectation
+// checks match the tag predicate's fields.
+func TestVerifyTagFixture(t *testing.T) {
+	t.Parallel()
+
+	stmt := loadFixture(t, "tag.intoto.json")
+	v, err := slsa.New()
+	require.NoError(t, err)
+
+	// The fixture's VSA summary attests L3; hygiene is active.
+	res, err := v.Verify(
+		context.Background(),
+		stmt,
+		slsa.WithMinLevel(1),
+		slsa.WithParam("expected_source_repo", "https://github.com/example/repo"),
+		slsa.WithParam("expected_branch", "refs/heads/main"),
+		slsa.WithParam("expected_tag", "v1.2.3"),
+	)
+	require.NoError(t, err)
+	assert.Equal(t, slsa.StatusPass, res.Status)
+	assert.Equal(t, 3, res.SLSALevel)
+
+	// All branch-provenance controls must have been skipped.
+	for _, cr := range res.CoreResults {
+		if cr.ID == "source-control-org-scs" || cr.ID == "source-control-scs-continuity" {
+			assert.Equal(t, slsa.StatusSkipped, cr.Status, "branch control %s should skip on tag provenance", cr.ID)
+		}
+	}
+
+	// A wrong expected tag fails the run.
+	res, err = v.Verify(
+		context.Background(),
+		stmt,
+		slsa.WithMinLevel(1),
+		slsa.WithParam("expected_tag", "v9.9.9"),
+	)
+	require.NoError(t, err)
+	assert.Equal(t, slsa.StatusFail, res.Status)
+
+	// A branch not covered by the VSA summaries fails the run.
+	res, err = v.Verify(
+		context.Background(),
+		stmt,
+		slsa.WithMinLevel(1),
+		slsa.WithParam("expected_branch", "refs/heads/other"),
+	)
+	require.NoError(t, err)
+	assert.Equal(t, slsa.StatusFail, res.Status)
+
+	// An enforcement date predating the hygiene control fails the
+	// L2 gate: the tag caps at level 1 (sourcetool's no-hygiene
+	// degrade), passing only when no higher level is required.
+	res, err = v.Verify(
+		context.Background(),
+		stmt,
+		slsa.WithMinLevel(1),
+		slsa.WithParam("enforced_since", "2025-01-01T00:00:00Z"),
+	)
+	require.NoError(t, err)
+	assert.Equal(t, slsa.StatusPass, res.Status)
+	assert.Equal(t, 1, res.SLSALevel)
+
+	res, err = v.Verify(
+		context.Background(),
+		stmt,
+		slsa.WithMinLevel(3),
+		slsa.WithParam("enforced_since", "2025-01-01T00:00:00Z"),
+	)
+	require.NoError(t, err)
+	assert.Equal(t, slsa.StatusFail, res.Status)
 }
 
 // TestVerifySourceFixtureEnforcedSince confirms the enforced_since param

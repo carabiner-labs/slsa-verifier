@@ -299,6 +299,12 @@ func TestManifestLevelsMatchSpec(t *testing.T) {
 	want := map[string]int{
 		"source-repo-match":                   1,
 		"source-branch-match":                 1,
+		"source-tag-match":                    1,
+		"source-tag-vsa-level-1":              1,
+		"source-tag-vsa-level-2":              2,
+		"source-tag-hygiene":                  2,
+		"source-tag-vsa-level-3":              3,
+		"source-tag-vsa-level-4":              4,
 		"source-control-org-scs":              1,
 		"source-control-scs-repo-id":          1,
 		"source-control-scs-revision-id":      1,
