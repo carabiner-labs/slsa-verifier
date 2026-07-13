@@ -1,0 +1,57 @@
+# SPDX-FileCopyrightText: Copyright 2026 The SLSA Authors
+# SPDX-License-Identifier: Apache-2.0
+#
+# A tag does not establish a SLSA source level through its own control
+# set: it inherits the levels recorded in the VSA summaries copied from
+# the branch VSAs that covered the tagged commit. One control per level
+# lets the verifier's level computation reproduce that inheritance. The
+# startsWith guard keeps the comparison from matching non-level entries
+# (e.g. "TAG_HYGIENE" would compare greater than any level string).
+---
+track: source
+id: source-tag-vsa-level-1
+title: Tag VSA Summaries Attest SLSA Source L1
+description: |
+  Asserts a VSA summary in the tag provenance records the tagged commit
+  as verified at SLSA Source L1 or higher.
+checks:
+  - predicateType: https://github.com/slsa-framework/slsa-source-poc/tag-provenance/v1-draft
+    expression: >-
+      predicate.vsaSummaries.exists(s, s.verifiedLevels.exists(l,
+      l.startsWith("SLSA_SOURCE_LEVEL_") && l >= "SLSA_SOURCE_LEVEL_1"))
+---
+track: source
+id: source-tag-vsa-level-2
+title: Tag VSA Summaries Attest SLSA Source L2
+description: |
+  Asserts a VSA summary in the tag provenance records the tagged commit
+  as verified at SLSA Source L2 or higher.
+checks:
+  - predicateType: https://github.com/slsa-framework/slsa-source-poc/tag-provenance/v1-draft
+    expression: >-
+      predicate.vsaSummaries.exists(s, s.verifiedLevels.exists(l,
+      l.startsWith("SLSA_SOURCE_LEVEL_") && l >= "SLSA_SOURCE_LEVEL_2"))
+---
+track: source
+id: source-tag-vsa-level-3
+title: Tag VSA Summaries Attest SLSA Source L3
+description: |
+  Asserts a VSA summary in the tag provenance records the tagged commit
+  as verified at SLSA Source L3 or higher.
+checks:
+  - predicateType: https://github.com/slsa-framework/slsa-source-poc/tag-provenance/v1-draft
+    expression: >-
+      predicate.vsaSummaries.exists(s, s.verifiedLevels.exists(l,
+      l.startsWith("SLSA_SOURCE_LEVEL_") && l >= "SLSA_SOURCE_LEVEL_3"))
+---
+track: source
+id: source-tag-vsa-level-4
+title: Tag VSA Summaries Attest SLSA Source L4
+description: |
+  Asserts a VSA summary in the tag provenance records the tagged commit
+  as verified at SLSA Source L4 or higher.
+checks:
+  - predicateType: https://github.com/slsa-framework/slsa-source-poc/tag-provenance/v1-draft
+    expression: >-
+      predicate.vsaSummaries.exists(s, s.verifiedLevels.exists(l,
+      l.startsWith("SLSA_SOURCE_LEVEL_") && l >= "SLSA_SOURCE_LEVEL_4"))

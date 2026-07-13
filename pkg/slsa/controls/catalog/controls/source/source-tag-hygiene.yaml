@@ -1,0 +1,18 @@
+# SPDX-FileCopyrightText: Copyright 2026 The SLSA Authors
+# SPDX-License-Identifier: Apache-2.0
+---
+track: source
+id: source-tag-hygiene
+title: Tag Provenance Declares Tag Hygiene
+description: |
+  Asserts the tag provenance lists the SLSA_SOURCE_SCS_PROTECTED_REFS
+  control (or its deprecated alias TAG_HYGIENE) as active before the
+  provenance was issued: tags cannot be moved, deleted or fast-forwarded.
+  This control gates the levels a tag inherits from the VSA summaries of
+  the tagged commit — without it the tag caps at SLSA Source L1.
+checks:
+  - predicateType: https://github.com/slsa-framework/slsa-source-poc/tag-provenance/v1-draft
+    expression: >-
+      predicate.controls.exists(c, c.name in ["SLSA_SOURCE_SCS_PROTECTED_REFS", "TAG_HYGIENE"]
+      && c.since <= predicate.createdOn
+      && (!('enforced_since' in params) || c.since <= timestamp(string(params.enforced_since))))

@@ -6,10 +6,16 @@ id: source-branch-match
 title: Source Branch Matches Expected Reference
 description: |
   Asserts the SLSA source provenance targets the expected branch (e.g.
-  `refs/heads/main`). An identity check at L1. Skipped when the caller
-  does not state an expected branch.
+  `refs/heads/main`). An identity check at L1. On tag provenance the
+  check asserts the tagged commit was verified on the expected branch
+  (via the VSA summaries' source refs). Skipped when the caller does
+  not state an expected branch.
 checks:
   - predicateType: https://github.com/slsa-framework/slsa-source-poc/source-provenance/v1-draft
     expression: predicate.branch == params.expected_branch
+    optionalParameters:
+      - expected_branch
+  - predicateType: https://github.com/slsa-framework/slsa-source-poc/tag-provenance/v1-draft
+    expression: predicate.vsaSummaries.exists(s, params.expected_branch in s.sourceRefs)
     optionalParameters:
       - expected_branch

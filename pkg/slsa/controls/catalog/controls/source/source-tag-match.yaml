@@ -1,0 +1,15 @@
+# SPDX-FileCopyrightText: Copyright 2026 The SLSA Authors
+# SPDX-License-Identifier: Apache-2.0
+---
+track: source
+id: source-tag-match
+title: Tag Matches Expected Name
+description: |
+  Asserts the tag provenance covers the expected tag. The predicate
+  stores the bare tag name (e.g. `v1.2.3`, not `refs/tags/v1.2.3`).
+  Skipped when the caller does not state an expected tag.
+checks:
+  - predicateType: https://github.com/slsa-framework/slsa-source-poc/tag-provenance/v1-draft
+    expression: predicate.tag == params.expected_tag
+    optionalParameters:
+      - expected_tag
