@@ -20,6 +20,7 @@ const (
 	PredicateProvenanceV02    = "https://slsa.dev/provenance/v0.2"
 	PredicateProvenanceV1     = "https://slsa.dev/provenance/v1"
 	PredicateSourceProvenance = sourceprovenance.SourceProvPredicateType
+	PredicateTagProvenance    = sourceprovenance.TagProvPredicateType
 )
 
 // PredicateFactory returns an empty proto.Message of the matching predicate type.
@@ -37,6 +38,7 @@ var registeredPredicates = map[string]PredicateFactory{
 	PredicateProvenanceV02:    func() proto.Message { return &provenancev02.Provenance{} },
 	PredicateProvenanceV1:     func() proto.Message { return &provenancev1.Provenance{} },
 	PredicateSourceProvenance: func() proto.Message { return &sourceprovenance.SourceProvenancePred{} },
+	PredicateTagProvenance:    func() proto.Message { return &sourceprovenance.TagProvenancePred{} },
 }
 
 // IsKnownPredicateType reports whether the given URI matches a SLSA

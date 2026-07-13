@@ -6,6 +6,7 @@ package slsa
 import (
 	"context"
 	"fmt"
+	"maps"
 
 	"github.com/carabiner-dev/attestation"
 
@@ -60,6 +61,9 @@ func (v *Verifier) Verify(ctx context.Context, statement attestation.Statement, 
 	}
 
 	vopts := v.defaultVerificationOptions
+	// The struct copy above still shares the default Params map; clone it
+	// so WithParam calls don't leak into subsequent Verify calls.
+	vopts.Params = maps.Clone(vopts.Params)
 	for _, fn := range opts {
 		if err := fn(&vopts); err != nil {
 			return nil, fmt.Errorf("applying verification option: %w", err)

@@ -59,12 +59,13 @@ type sourceOptions struct {
 	// verified against; empty means the latest the catalog defines.
 	Spec string
 
-	// ExpectedRepo and ExpectedBranch state the expected origin of the
-	// revision (spec step 2). They feed the expected_source_repo and
-	// expected_branch control params; when unset those checks are
-	// skipped.
+	// ExpectedRepo, ExpectedBranch and ExpectedTag state the expected
+	// origin of the revision (spec step 2). They feed the
+	// expected_source_repo, expected_branch and expected_tag control
+	// params; when unset those checks are skipped.
 	ExpectedRepo   string
 	ExpectedBranch string
+	ExpectedTag    string
 
 	// Since requires every control to have been active since at or
 	// before the given date (RFC3339 or YYYY-MM-DD). It feeds the
@@ -100,6 +101,10 @@ func (o *sourceOptions) AddFlags(cmd *cobra.Command) {
 	cmd.PersistentFlags().StringVar(
 		&o.ExpectedBranch, "expected-branch", "",
 		"expected branch ref, eg refs/heads/main",
+	)
+	cmd.PersistentFlags().StringVar(
+		&o.ExpectedTag, "expected-tag", "",
+		"expected tag name (tag provenance only), eg v1.2.3",
 	)
 	cmd.PersistentFlags().StringVar(
 		&o.Since, "since", "",
@@ -142,6 +147,10 @@ func (o *sourceOptions) Validate() error {
 	}
 	if o.ExpectedBranch != "" {
 		o.shared.Params["expected_branch"] = o.ExpectedBranch
+	}
+	if o.ExpectedTag != "" {
+		// Tag provenance stores the bare tag name, not the full ref.
+		o.shared.Params["expected_tag"] = strings.TrimPrefix(o.ExpectedTag, "refs/tags/")
 	}
 	if o.Since != "" {
 		since, sErr := parseSinceDate(o.Since)
