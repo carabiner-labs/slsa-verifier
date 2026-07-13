@@ -21,6 +21,13 @@ const (
 	PredicateProvenanceV1     = "https://slsa.dev/provenance/v1"
 	PredicateSourceProvenance = sourceprovenance.SourceProvPredicateType
 	PredicateTagProvenance    = sourceprovenance.TagProvPredicateType
+
+	// The final (non-draft) source predicate types, published under the
+	// project's new name (source-tool, formerly slsa-source-poc). They
+	// carry the same payload as the v1-draft versions and parse into
+	// the same protos.
+	PredicateSourceProvenanceV1 = "https://github.com/slsa-framework/source-tool/source-provenance/v1"
+	PredicateTagProvenanceV1    = "https://github.com/slsa-framework/source-tool/tag-provenance/v1"
 )
 
 // PredicateFactory returns an empty proto.Message of the matching predicate type.
@@ -34,11 +41,13 @@ type PredicateFactory func() proto.Message
 // predicate type) so adding new tracks to a predicate type is a YAML
 // edit, not a Go edit.
 var registeredPredicates = map[string]PredicateFactory{
-	PredicateProvenanceV01:    func() proto.Message { return &provenancev01.Provenance{} },
-	PredicateProvenanceV02:    func() proto.Message { return &provenancev02.Provenance{} },
-	PredicateProvenanceV1:     func() proto.Message { return &provenancev1.Provenance{} },
-	PredicateSourceProvenance: func() proto.Message { return &sourceprovenance.SourceProvenancePred{} },
-	PredicateTagProvenance:    func() proto.Message { return &sourceprovenance.TagProvenancePred{} },
+	PredicateProvenanceV01:      func() proto.Message { return &provenancev01.Provenance{} },
+	PredicateProvenanceV02:      func() proto.Message { return &provenancev02.Provenance{} },
+	PredicateProvenanceV1:       func() proto.Message { return &provenancev1.Provenance{} },
+	PredicateSourceProvenance:   func() proto.Message { return &sourceprovenance.SourceProvenancePred{} },
+	PredicateTagProvenance:      func() proto.Message { return &sourceprovenance.TagProvenancePred{} },
+	PredicateSourceProvenanceV1: func() proto.Message { return &sourceprovenance.SourceProvenancePred{} },
+	PredicateTagProvenanceV1:    func() proto.Message { return &sourceprovenance.TagProvenancePred{} },
 }
 
 // IsKnownPredicateType reports whether the given URI matches a SLSA

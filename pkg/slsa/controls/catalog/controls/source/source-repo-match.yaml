@@ -18,3 +18,11 @@ checks:
     expression: predicate.repoUri == params.expected_source_repo
     optionalParameters:
       - expected_source_repo
+  - predicateType: https://github.com/slsa-framework/source-tool/source-provenance/v1
+    expression: predicate.repoUri == params.expected_source_repo
+    optionalParameters:
+      - expected_source_repo
+  - predicateType: https://github.com/slsa-framework/source-tool/tag-provenance/v1
+    expression: predicate.repoUri == params.expected_source_repo
+    optionalParameters:
+      - expected_source_repo

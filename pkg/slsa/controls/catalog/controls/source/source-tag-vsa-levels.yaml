@@ -19,6 +19,10 @@ checks:
     expression: >-
       predicate.vsaSummaries.exists(s, s.verifiedLevels.exists(l,
       l.startsWith("SLSA_SOURCE_LEVEL_") && l >= "SLSA_SOURCE_LEVEL_1"))
+  - predicateType: https://github.com/slsa-framework/source-tool/tag-provenance/v1
+    expression: >-
+      predicate.vsaSummaries.exists(s, s.verifiedLevels.exists(l,
+      l.startsWith("SLSA_SOURCE_LEVEL_") && l >= "SLSA_SOURCE_LEVEL_1"))
 ---
 track: source
 id: source-tag-vsa-level-2
@@ -28,6 +32,10 @@ description: |
   as verified at SLSA Source L2 or higher.
 checks:
   - predicateType: https://github.com/slsa-framework/slsa-source-poc/tag-provenance/v1-draft
+    expression: >-
+      predicate.vsaSummaries.exists(s, s.verifiedLevels.exists(l,
+      l.startsWith("SLSA_SOURCE_LEVEL_") && l >= "SLSA_SOURCE_LEVEL_2"))
+  - predicateType: https://github.com/slsa-framework/source-tool/tag-provenance/v1
     expression: >-
       predicate.vsaSummaries.exists(s, s.verifiedLevels.exists(l,
       l.startsWith("SLSA_SOURCE_LEVEL_") && l >= "SLSA_SOURCE_LEVEL_2"))
@@ -43,6 +51,10 @@ checks:
     expression: >-
       predicate.vsaSummaries.exists(s, s.verifiedLevels.exists(l,
       l.startsWith("SLSA_SOURCE_LEVEL_") && l >= "SLSA_SOURCE_LEVEL_3"))
+  - predicateType: https://github.com/slsa-framework/source-tool/tag-provenance/v1
+    expression: >-
+      predicate.vsaSummaries.exists(s, s.verifiedLevels.exists(l,
+      l.startsWith("SLSA_SOURCE_LEVEL_") && l >= "SLSA_SOURCE_LEVEL_3"))
 ---
 track: source
 id: source-tag-vsa-level-4
@@ -52,6 +64,10 @@ description: |
   as verified at SLSA Source L4 or higher.
 checks:
   - predicateType: https://github.com/slsa-framework/slsa-source-poc/tag-provenance/v1-draft
+    expression: >-
+      predicate.vsaSummaries.exists(s, s.verifiedLevels.exists(l,
+      l.startsWith("SLSA_SOURCE_LEVEL_") && l >= "SLSA_SOURCE_LEVEL_4"))
+  - predicateType: https://github.com/slsa-framework/source-tool/tag-provenance/v1
     expression: >-
       predicate.vsaSummaries.exists(s, s.verifiedLevels.exists(l,
       l.startsWith("SLSA_SOURCE_LEVEL_") && l >= "SLSA_SOURCE_LEVEL_4"))

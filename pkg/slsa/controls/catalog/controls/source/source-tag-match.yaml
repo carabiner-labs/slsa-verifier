@@ -13,3 +13,7 @@ checks:
     expression: predicate.tag == params.expected_tag
     optionalParameters:
       - expected_tag
+  - predicateType: https://github.com/slsa-framework/source-tool/tag-provenance/v1
+    expression: predicate.tag == params.expected_tag
+    optionalParameters:
+      - expected_tag
