@@ -36,7 +36,12 @@ func printResult(w io.Writer, result *slsa.Result, verbose bool) {
 	writef(w, "\n")
 
 	printLayer(w, "Core", result.CoreResults, verbose)
-	printLayer(w, "BuildType", result.BuildTypeResults, verbose)
+	// A nil buildType slice means the layer was not evaluated at all
+	// (e.g. the source track, which has no buildType concept): omit the
+	// section instead of printing an empty roster.
+	if result.BuildTypeResults != nil {
+		printLayer(w, "BuildType", result.BuildTypeResults, verbose)
+	}
 	printLayer(w, "User", result.UserResults, verbose)
 }
 

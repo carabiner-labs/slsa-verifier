@@ -312,6 +312,9 @@ func runSource(cmd *cobra.Command, opts *sourceOptions) error {
 		slsa.WithSpecVersion(opts.Spec),
 		slsa.WithMinLevel(opts.MinLevel),
 		slsa.WithVerifierID(verifierID),
+		// There is no buildType concept on the source track: skip the
+		// layer so it is not evaluated (or rendered) at all.
+		slsa.WithBuildTypeControls(false),
 	)
 	// Signature/identity failures from the verification layer are a
 	// verification outcome (exit 1), not an execution failure (exit 2).

@@ -112,12 +112,27 @@ func TestPrintResultFailShowsMessageInline(t *testing.T) {
 func TestPrintResultEmptyLayerPrintsPlaceholder(t *testing.T) {
 	withNoColor(t)
 
-	res := &slsa.Result{Status: slsa.StatusPass}
+	// An evaluated-but-empty buildType layer prints the placeholder.
+	res := &slsa.Result{Status: slsa.StatusPass, BuildTypeResults: []*slsa.ControlResult{}}
 	var buf bytes.Buffer
 	printResult(&buf, res, false)
 	out := buf.String()
 	assert.Contains(t, out, "Core controls:\n  (none)")
 	assert.Contains(t, out, "BuildType controls:\n  (none)")
+	assert.Contains(t, out, "User controls:\n  (none)")
+}
+
+func TestPrintResultOmitsUnevaluatedBuildTypeLayer(t *testing.T) {
+	withNoColor(t)
+
+	// A nil buildType slice means the layer never ran (source track):
+	// the section is omitted entirely.
+	res := &slsa.Result{Status: slsa.StatusPass}
+	var buf bytes.Buffer
+	printResult(&buf, res, false)
+	out := buf.String()
+	assert.NotContains(t, out, "BuildType")
+	assert.Contains(t, out, "Core controls:\n  (none)")
 	assert.Contains(t, out, "User controls:\n  (none)")
 }
 
