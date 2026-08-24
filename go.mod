@@ -1,6 +1,6 @@
 module github.com/carabiner-labs/slsa-verifier
 
-go 1.25.9
+go 1.26
 
 require (
 	github.com/carabiner-dev/attestation v0.2.1
