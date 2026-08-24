@@ -10,7 +10,7 @@ require (
 	github.com/fatih/color v1.19.0
 	github.com/google/cel-go v0.28.0
 	github.com/in-toto/attestation v1.2.0
-	github.com/slsa-framework/source-tool v0.6.2
+	github.com/slsa-framework/source-tool v0.7.0
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.11.1
 	google.golang.org/protobuf v1.36.12
