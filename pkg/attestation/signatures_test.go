@@ -51,7 +51,7 @@ func TestVerifySignaturesRequiredAndUnsigned(t *testing.T) {
 	env := newSignedEnv(nil, nil) // no sigs, Verify returns nil
 	err := New().VerifySignatures(env, SignatureOptions{Required: true})
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, ErrSignatureRequired),
+	assert.ErrorIs(t, err, ErrSignatureRequired,
 		"expected ErrSignatureRequired, got %v", err)
 }
 
@@ -78,5 +78,5 @@ func TestVerifySignaturesPropagatesEnvelopeError(t *testing.T) {
 	env := newSignedEnv([]cdattestation.Signature{fakeSignature{}}, want)
 	err := New().VerifySignatures(env, SignatureOptions{})
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, want), "expected wrapped envelope error, got %v", err)
+	assert.ErrorIs(t, err, want, "expected wrapped envelope error, got %v", err)
 }

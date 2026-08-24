@@ -5,7 +5,6 @@ package attestation
 
 import (
 	"context"
-	"errors"
 	"testing"
 
 	cdattestation "github.com/carabiner-dev/attestation"
@@ -89,7 +88,7 @@ func TestVerifyVSAAllChecksPass(t *testing.T) {
 	t.Parallel()
 
 	v := New()
-	result, err := v.VerifyVSA(context.Background(), vsaEnv(nil), VSAOptions{
+	result, err := v.VerifyVSA(context.Background(), vsaEnv(nil), &VSAOptions{
 		Verifier:     "https://verify.example.com",
 		Levels:       []string{"SLSA_BUILD_LEVEL_3"},
 		Resource:     "pkg:oci/foo@sha256:abc",
@@ -108,7 +107,7 @@ func TestVerifyVSAResultMustBePassed(t *testing.T) {
 	env := vsaEnv(func(p *vsav1.VerificationSummary) {
 		p.VerificationResult = vsa.ResultFailed
 	})
-	result, err := New().VerifyVSA(context.Background(), env, VSAOptions{
+	result, err := New().VerifyVSA(context.Background(), env, &VSAOptions{
 		Verifier: "https://verify.example.com",
 	})
 	require.NoError(t, err)
@@ -127,7 +126,7 @@ func TestVerifyVSAResultMustBePassed(t *testing.T) {
 func TestVerifyVSAVerifierMismatchFails(t *testing.T) {
 	t.Parallel()
 
-	result, err := New().VerifyVSA(context.Background(), vsaEnv(nil), VSAOptions{
+	result, err := New().VerifyVSA(context.Background(), vsaEnv(nil), &VSAOptions{
 		Verifier: "https://other.example.com",
 	})
 	require.NoError(t, err)
@@ -141,7 +140,7 @@ func TestVerifyVSALevelOrMatched(t *testing.T) {
 	// At-least one of the listed wants must be satisfied. Both pass
 	// here (the second is the actual level, the first is below it
 	// and is satisfied by at-or-above semantics).
-	result, err := New().VerifyVSA(context.Background(), vsaEnv(nil), VSAOptions{
+	result, err := New().VerifyVSA(context.Background(), vsaEnv(nil), &VSAOptions{
 		Verifier: "https://verify.example.com",
 		Levels:   []string{"SLSA_BUILD_LEVEL_4", "SLSA_BUILD_LEVEL_3"},
 	})
@@ -156,7 +155,7 @@ func TestVerifyVSALevelAtOrAboveSatisfies(t *testing.T) {
 	env := vsaEnv(func(p *vsav1.VerificationSummary) {
 		p.VerifiedLevels = []string{"SLSA_BUILD_LEVEL_4"}
 	})
-	result, err := New().VerifyVSA(context.Background(), env, VSAOptions{
+	result, err := New().VerifyVSA(context.Background(), env, &VSAOptions{
 		Verifier: "https://verify.example.com",
 		Levels:   []string{"SLSA_BUILD_LEVEL_3"},
 	})
@@ -169,7 +168,7 @@ func TestVerifyVSALevelBelowWantFails(t *testing.T) {
 	t.Parallel()
 
 	// fixture has SLSA_BUILD_LEVEL_3, want LEVEL_4 → fails (3 < 4).
-	result, err := New().VerifyVSA(context.Background(), vsaEnv(nil), VSAOptions{
+	result, err := New().VerifyVSA(context.Background(), vsaEnv(nil), &VSAOptions{
 		Verifier: "https://verify.example.com",
 		Levels:   []string{"SLSA_BUILD_LEVEL_4"},
 	})
@@ -185,7 +184,7 @@ func TestVerifyVSALevelDifferentTrackFails(t *testing.T) {
 	env := vsaEnv(func(p *vsav1.VerificationSummary) {
 		p.VerifiedLevels = []string{"SLSA_BUILD_LEVEL_4"}
 	})
-	result, err := New().VerifyVSA(context.Background(), env, VSAOptions{
+	result, err := New().VerifyVSA(context.Background(), env, &VSAOptions{
 		Verifier: "https://verify.example.com",
 		Levels:   []string{"SLSA_SOURCE_LEVEL_3"},
 	})
@@ -201,7 +200,7 @@ func TestVerifyVSADependenciesAndMatched(t *testing.T) {
 	env := vsaEnv(func(p *vsav1.VerificationSummary) {
 		p.DependencyLevels = map[string]uint64{"SLSA_BUILD_LEVEL_2": 1}
 	})
-	result, err := New().VerifyVSA(context.Background(), env, VSAOptions{
+	result, err := New().VerifyVSA(context.Background(), env, &VSAOptions{
 		Verifier:     "https://verify.example.com",
 		Dependencies: []string{"SLSA_BUILD_LEVEL_2", "SLSA_BUILD_LEVEL_3"},
 	})
@@ -213,7 +212,7 @@ func TestVerifyVSADependenciesAndMatched(t *testing.T) {
 func TestVerifyVSAVerifierRequiredOnOptions(t *testing.T) {
 	t.Parallel()
 
-	_, err := New().VerifyVSA(context.Background(), vsaEnv(nil), VSAOptions{})
+	_, err := New().VerifyVSA(context.Background(), vsaEnv(nil), &VSAOptions{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "Verifier is required")
 }
@@ -221,7 +220,7 @@ func TestVerifyVSAVerifierRequiredOnOptions(t *testing.T) {
 func TestVerifyVSANilEnvelope(t *testing.T) {
 	t.Parallel()
 
-	_, err := New().VerifyVSA(context.Background(), nil, VSAOptions{
+	_, err := New().VerifyVSA(context.Background(), nil, &VSAOptions{
 		Verifier: "https://verify.example.com",
 	})
 	require.Error(t, err)
@@ -236,9 +235,9 @@ func TestVerifyVSANonVSAPredicateReturnsErrNotVSA(t *testing.T) {
 			pred:  &fakePredicate{pType: "https://slsa.dev/provenance/v1", parsed: nil},
 		},
 	}
-	_, err := New().VerifyVSA(context.Background(), env, VSAOptions{
+	_, err := New().VerifyVSA(context.Background(), env, &VSAOptions{
 		Verifier: "https://verify.example.com",
 	})
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, vsa.ErrNotVSA), "expected ErrNotVSA, got %v", err)
+	assert.ErrorIs(t, err, vsa.ErrNotVSA, "expected ErrNotVSA, got %v", err)
 }

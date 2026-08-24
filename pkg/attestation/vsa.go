@@ -90,9 +90,12 @@ type VSACheck struct {
 //
 // ctx is accepted for future cancellation/deadline plumbing; the
 // current check set is purely in-memory and ignores it.
-func (*Verifier) VerifyVSA(_ context.Context, env Envelope, opts VSAOptions) (*VSAResult, error) {
+func (*Verifier) VerifyVSA(_ context.Context, env Envelope, opts *VSAOptions) (*VSAResult, error) {
 	if env == nil {
 		return nil, errors.New("nil envelope")
+	}
+	if opts == nil {
+		return nil, errors.New("nil VSAOptions")
 	}
 	if opts.Verifier == "" {
 		return nil, errors.New("VSAOptions.Verifier is required")

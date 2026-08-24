@@ -232,9 +232,9 @@ func TestValidateCategory(t *testing.T) {
 	assert.NoError(t, validateCategory(SourceCore))
 	assert.NoError(t, validateCategory(BuildType))
 	assert.NoError(t, validateCategory(Category("source/1.3/core")))
-	assert.Error(t, validateCategory(Category("source/core")), "unversioned core must be rejected")
-	assert.Error(t, validateCategory(Category("source/notaversion/core")))
-	assert.Error(t, validateCategory(Category("core")))
+	require.Error(t, validateCategory(Category("source/core")), "unversioned core must be rejected")
+	require.Error(t, validateCategory(Category("source/notaversion/core")))
+	require.Error(t, validateCategory(Category("core")))
 	assert.Error(t, validateCategory(Category("source/1.2/extra/core")))
 }
 
@@ -270,11 +270,11 @@ func TestResolveCore(t *testing.T) {
 	// A spec predating the track's first catalog is an error: the
 	// track did not exist in that release.
 	_, _, err = cat.ResolveCore(TrackSource, "1.1")
-	assert.Error(t, err)
+	require.Error(t, err)
 
 	// Malformed versions are errors.
 	_, _, err = cat.ResolveCore(TrackBuild, "one.two")
-	assert.Error(t, err)
+	require.Error(t, err)
 	_, _, err = cat.ResolveCore(TrackBuild, "1")
 	assert.Error(t, err)
 }

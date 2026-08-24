@@ -55,7 +55,7 @@ type SummaryInput struct {
 // Statement builds an unsigned in-toto Statement wrapping a VSA v1
 // predicate from in. The returned statement carries no signature; render
 // it with Marshal before writing it out.
-func (in SummaryInput) Statement() (*intoto.Statement, error) {
+func (in *SummaryInput) Statement() (*intoto.Statement, error) {
 	pred := &vsav1.VerificationSummary{
 		Verifier:           &vsav1.VerificationSummary_Verifier{Id: in.VerifierID},
 		ResourceUri:        in.ResourceURI,

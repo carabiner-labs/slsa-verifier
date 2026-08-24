@@ -4,7 +4,6 @@
 package attestation
 
 import (
-	"errors"
 	"testing"
 
 	cdattestation "github.com/carabiner-dev/attestation"
@@ -67,7 +66,7 @@ func TestVerifyIdentityNoMatchReturnsErr(t *testing.T) {
 	}
 	err := New().VerifyIdentity(env, []*sapi.Identity{{}})
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, ErrIdentityMismatch))
+	assert.ErrorIs(t, err, ErrIdentityMismatch)
 }
 
 func TestVerifyIdentityNoVerificationMaterial(t *testing.T) {
@@ -76,5 +75,5 @@ func TestVerifyIdentityNoVerificationMaterial(t *testing.T) {
 	// vsa_test.go's fakeEnvelope returns nil for GetVerification.
 	err := New().VerifyIdentity(&fakeEnvelope{}, []*sapi.Identity{{}})
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, ErrIdentityMismatch))
+	assert.ErrorIs(t, err, ErrIdentityMismatch)
 }

@@ -4,7 +4,6 @@
 package vsa
 
 import (
-	"errors"
 	"testing"
 	"time"
 
@@ -103,7 +102,7 @@ func TestFromParsedUnknownPredicateType(t *testing.T) {
 
 	_, err := FromParsed("https://slsa.dev/provenance/v1", &vsav1.VerificationSummary{})
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, ErrNotVSA), "expected ErrNotVSA, got %v", err)
+	assert.ErrorIs(t, err, ErrNotVSA, "expected ErrNotVSA, got %v", err)
 }
 
 func TestFromParsedWrongPayloadTypeForRegistered(t *testing.T) {

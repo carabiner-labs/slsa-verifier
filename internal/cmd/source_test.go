@@ -34,7 +34,7 @@ func TestParseSourceLevel(t *testing.T) {
 	} {
 		got, err := parseSourceLevel(tc.value)
 		if tc.wantErr {
-			assert.Error(t, err, "value %q", tc.value)
+			require.Error(t, err, "value %q", tc.value)
 			continue
 		}
 		require.NoError(t, err, "value %q", tc.value)
@@ -72,7 +72,7 @@ func TestParseSinceDate(t *testing.T) {
 	assert.Equal(t, "2025-08-01T00:00:00Z", got)
 
 	_, err = parseSinceDate("August 1st")
-	assert.Error(t, err)
+	require.Error(t, err)
 	_, err = parseSinceDate("2025-13-45")
 	assert.Error(t, err)
 }

@@ -67,12 +67,12 @@ func parseSpecVersion(value string) (specVersion, error) {
 	if !found {
 		return specVersion{}, fmt.Errorf("invalid SLSA spec version %q (want major.minor, e.g. 1.2)", value)
 	}
-	maj, majErr := strconv.Atoi(major)
-	min, minErr := strconv.Atoi(minor)
-	if majErr != nil || minErr != nil || maj < 0 || min < 0 {
+	majorNum, majErr := strconv.Atoi(major)
+	minorNum, minErr := strconv.Atoi(minor)
+	if majErr != nil || minErr != nil || majorNum < 0 || minorNum < 0 {
 		return specVersion{}, fmt.Errorf("invalid SLSA spec version %q (want major.minor, e.g. 1.2)", value)
 	}
-	return specVersion{major: maj, minor: min}, nil
+	return specVersion{major: majorNum, minor: minorNum}, nil
 }
 
 // coreCategorySuffix is the last path segment of every core category.

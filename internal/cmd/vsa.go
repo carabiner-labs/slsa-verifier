@@ -78,8 +78,8 @@ func (o *vsaOptions) Validate() error {
 // toLibOptions converts the CLI flag struct to the library's
 // VSAOptions. Kept as a tiny adapter so the CLI flag layer can evolve
 // independently of the library's public option fields.
-func (o *vsaOptions) toLibOptions() attestation.VSAOptions {
-	return attestation.VSAOptions{
+func (o *vsaOptions) toLibOptions() *attestation.VSAOptions {
+	return &attestation.VSAOptions{
 		Verifier:     o.Verifier,
 		Levels:       o.Levels,
 		Resource:     o.Resource,

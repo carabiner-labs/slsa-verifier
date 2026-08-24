@@ -68,10 +68,7 @@ func (adapterV02) Convert(parsed any) (*VSA, error) {
 		DependencyLevels:   p.DependencyLevels,
 	}
 	for _, in := range p.InputAttestations {
-		out.InputAttestations = append(out.InputAttestations, InputAttestation{
-			URI:    in.URI,
-			Digest: in.Digest,
-		})
+		out.InputAttestations = append(out.InputAttestations, InputAttestation(in))
 	}
 	if p.PolicyLevel != "" {
 		out.VerifiedLevels = []string{p.PolicyLevel}
