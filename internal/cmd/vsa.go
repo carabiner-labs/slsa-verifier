@@ -145,7 +145,7 @@ func runVSA(cmd *cobra.Command, opts *vsaOptions) error {
 		Keys:     keys,
 		Required: opts.shared.RequireSignatures,
 	}); err != nil {
-		if errors.Is(err, attestation.ErrSignatureRequired) {
+		if errors.Is(err, attestation.ErrSignatureRequired) || errors.Is(err, attestation.ErrSignatureUnverified) {
 			writef(cmd.OutOrStdout(), "%s\n  Signature: %s\n", redf("FAIL"), err)
 			return ErrVerifyFailed
 		}

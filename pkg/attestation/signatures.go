@@ -18,6 +18,15 @@ import (
 // problem.
 var ErrSignatureRequired = errors.New("envelope is unsigned and signatures are required")
 
+// ErrSignatureUnverified is returned by VerifySignatures when the
+// envelope carries signatures but, after Verify, exposes no
+// verification result marked as verified. That happens when no key
+// or trust material was supplied to check the signatures against,
+// or when the material was supplied and none of the signatures
+// matched. Like ErrSignatureRequired it is a verification outcome,
+// not an execution error.
+var ErrSignatureUnverified = errors.New("envelope is signed but its signature was not verified and signatures are required")
+
 // SignatureOptions parameterizes VerifySignatures. Keys are passed
 // to the envelope's Verify implementation; Required toggles the
 // "unsigned → error" policy independent of any keys.
@@ -28,23 +37,33 @@ type SignatureOptions struct {
 	Keys []key.PublicKeyProvider
 
 	// Required, when true, makes VerifySignatures return
-	// ErrSignatureRequired if the envelope carries zero signatures.
-	// Use this to enforce a "must be signed" policy independent of
-	// what Keys were supplied.
+	// ErrSignatureRequired if the envelope carries zero signatures,
+	// and ErrSignatureUnverified if it carries signatures that did
+	// not produce a verified result. Use this to enforce a "must be
+	// signed and verified" policy.
 	Required bool
 }
 
 // VerifySignatures runs the envelope's cryptographic signature
 // verification and, when opts.Required is set, also enforces that
-// the envelope is signed at all. The two checks are kept in one
-// method because callers nearly always want both: confirming the
-// signatures that are present are valid, and confirming there is
-// at least one of them when policy demands it.
+// the envelope is signed and that the signature verified. The checks
+// are kept in one method because callers nearly always want both:
+// running verification on whatever signatures are present, and
+// demanding a verified signature when policy requires it.
 //
-// Returns ErrSignatureRequired when the envelope is unsigned and
-// opts.Required is true. Other errors come from the envelope's
-// Verify implementation (typically signature/key mismatches, or
-// trust-root failures for Sigstore bundles).
+// A missing signal is not an error on its own: an unsigned envelope,
+// or a signed one with no key material to check it against, passes
+// when opts.Required is false. Errors from the envelope's Verify
+// implementation (signature/key mismatches, trust-root failures for
+// Sigstore bundles) always propagate.
+//
+// With opts.Required set, returns ErrSignatureRequired when the
+// envelope carries no signatures, and ErrSignatureUnverified when it
+// carries signatures but GetVerification reports no verified result.
+// The verdict is read from the envelope's Verification rather than
+// from the presence of signatures because envelope implementations
+// may record a failed verification as a result instead of returning
+// an error from Verify.
 func (*Verifier) VerifySignatures(env Envelope, opts SignatureOptions) error {
 	if env == nil {
 		return errors.New("nil envelope")
@@ -52,8 +71,14 @@ func (*Verifier) VerifySignatures(env Envelope, opts SignatureOptions) error {
 	if err := env.Verify(opts.Keys); err != nil {
 		return fmt.Errorf("verifying envelope signatures: %w", err)
 	}
-	if opts.Required && len(env.GetSignatures()) == 0 {
+	if !opts.Required {
+		return nil
+	}
+	if len(env.GetSignatures()) == 0 {
 		return ErrSignatureRequired
+	}
+	if v := env.GetVerification(); v == nil || !v.GetVerified() {
+		return ErrSignatureUnverified
 	}
 	return nil
 }

@@ -13,20 +13,24 @@ import (
 )
 
 // signedEnvelope is a fakeEnvelope flavour with a configurable
-// signature list and Verify hook, so signature tests can drive both
-// the cryptographic path (env.Verify error) and the policy path
-// (Required-but-unsigned) without colliding with vsa_test.go's
-// fakeEnvelope behaviour.
+// signature list, verification result and Verify hook, so signature
+// tests can drive the cryptographic path (env.Verify error), the
+// recorded-result path (GetVerification) and the policy path
+// (Required) without colliding with vsa_test.go's fakeEnvelope
+// behaviour.
 type signedEnvelope struct {
 	*fakeEnvelope
+	ver       cdattestation.Verification
 	verifyErr error
 }
 
-func (e *signedEnvelope) Verify(_ ...any) error { return e.verifyErr }
+func (e *signedEnvelope) GetVerification() cdattestation.Verification { return e.ver }
+func (e *signedEnvelope) Verify(_ ...any) error                       { return e.verifyErr }
 
-func newSignedEnv(sigs []cdattestation.Signature, verifyErr error) *signedEnvelope {
+func newSignedEnv(sigs []cdattestation.Signature, ver cdattestation.Verification, verifyErr error) *signedEnvelope {
 	return &signedEnvelope{
 		fakeEnvelope: &fakeEnvelope{sigs: sigs},
+		ver:          ver,
 		verifyErr:    verifyErr,
 	}
 }
@@ -38,6 +42,8 @@ type fakeSignature struct{}
 func (fakeSignature) GetKeyid() string { return "test-keyid" }
 func (fakeSignature) GetSig() []byte   { return []byte("sig") }
 
+var oneSig = []cdattestation.Signature{fakeSignature{}}
+
 func TestVerifySignaturesNilEnvelope(t *testing.T) {
 	t.Parallel()
 
@@ -45,38 +51,98 @@ func TestVerifySignaturesNilEnvelope(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestVerifySignaturesRequiredAndUnsigned(t *testing.T) {
+func TestVerifySignaturesRequired(t *testing.T) {
 	t.Parallel()
 
-	env := newSignedEnv(nil, nil) // no sigs, Verify returns nil
-	err := New().VerifySignatures(env, SignatureOptions{Required: true})
-	require.Error(t, err)
-	assert.ErrorIs(t, err, ErrSignatureRequired,
-		"expected ErrSignatureRequired, got %v", err)
+	for _, tc := range []struct {
+		name    string
+		sigs    []cdattestation.Signature
+		ver     cdattestation.Verification
+		wantErr error
+	}{
+		{
+			name: "unsigned",
+			sigs: nil, ver: nil,
+			wantErr: ErrSignatureRequired,
+		},
+		{
+			// An envelope that claims to be verified but carries no
+			// signatures is still unsigned; the signature check wins.
+			name: "unsigned with stray verification",
+			sigs: nil, ver: &fakeVerification{verified: true},
+			wantErr: ErrSignatureRequired,
+		},
+		{
+			// Signature present, Verify returned nil, but nothing
+			// recorded a verified result: no key material was given.
+			name: "signed without verification result",
+			sigs: oneSig, ver: nil,
+			wantErr: ErrSignatureUnverified,
+		},
+		{
+			// Signature present, Verify returned nil, and the envelope
+			// recorded a failed verification as a result rather than
+			// an error (collector DSSE envelope behaviour).
+			name: "signed but verification failed",
+			sigs: oneSig, ver: &fakeVerification{verified: false},
+			wantErr: ErrSignatureUnverified,
+		},
+		{
+			name: "signed and verified",
+			sigs: oneSig, ver: &fakeVerification{verified: true},
+			wantErr: nil,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			env := newSignedEnv(tc.sigs, tc.ver, nil)
+			err := New().VerifySignatures(env, SignatureOptions{Required: true})
+			if tc.wantErr == nil {
+				assert.NoError(t, err)
+				return
+			}
+			require.Error(t, err)
+			assert.ErrorIs(t, err, tc.wantErr, "expected %v, got %v", tc.wantErr, err)
+		})
+	}
 }
 
-func TestVerifySignaturesRequiredAndSigned(t *testing.T) {
+func TestVerifySignaturesNotRequired(t *testing.T) {
 	t.Parallel()
 
-	env := newSignedEnv([]cdattestation.Signature{fakeSignature{}}, nil)
-	err := New().VerifySignatures(env, SignatureOptions{Required: true})
-	assert.NoError(t, err)
-}
+	// With Required=false a missing or negative signal is not an
+	// error: only a failure reported by Verify itself is.
+	for _, tc := range []struct {
+		name string
+		sigs []cdattestation.Signature
+		ver  cdattestation.Verification
+	}{
+		{name: "unsigned", sigs: nil, ver: nil},
+		{name: "signed without verification result", sigs: oneSig, ver: nil},
+		{name: "signed but verification failed", sigs: oneSig, ver: &fakeVerification{verified: false}},
+		{name: "signed and verified", sigs: oneSig, ver: &fakeVerification{verified: true}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 
-func TestVerifySignaturesNotRequiredAndUnsigned(t *testing.T) {
-	t.Parallel()
-
-	env := newSignedEnv(nil, nil)
-	err := New().VerifySignatures(env, SignatureOptions{Required: false})
-	assert.NoError(t, err, "unsigned envelope must pass when Required=false")
+			env := newSignedEnv(tc.sigs, tc.ver, nil)
+			err := New().VerifySignatures(env, SignatureOptions{Required: false})
+			assert.NoError(t, err)
+		})
+	}
 }
 
 func TestVerifySignaturesPropagatesEnvelopeError(t *testing.T) {
 	t.Parallel()
 
 	want := errors.New("bad signature")
-	env := newSignedEnv([]cdattestation.Signature{fakeSignature{}}, want)
-	err := New().VerifySignatures(env, SignatureOptions{})
-	require.Error(t, err)
-	assert.ErrorIs(t, err, want, "expected wrapped envelope error, got %v", err)
+	for _, required := range []bool{false, true} {
+		env := newSignedEnv(oneSig, &fakeVerification{verified: true}, want)
+		err := New().VerifySignatures(env, SignatureOptions{Required: required})
+		require.Error(t, err)
+		require.ErrorIs(t, err, want, "required=%v: expected wrapped envelope error, got %v", required, err)
+		require.NotErrorIs(t, err, ErrSignatureRequired)
+		require.NotErrorIs(t, err, ErrSignatureUnverified)
+	}
 }
