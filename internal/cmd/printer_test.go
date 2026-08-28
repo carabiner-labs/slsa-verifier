@@ -151,3 +151,21 @@ func TestPrintResultAllSkippedInLayerShowsApplicableNote(t *testing.T) {
 	out := buf.String()
 	assert.Contains(t, out, "Core controls:\n  (no applicable controls)")
 }
+
+func TestPrintResultShowsResultMessage(t *testing.T) {
+	withNoColor(t)
+
+	res := &slsa.Result{
+		Status:    slsa.StatusFail,
+		SLSALevel: 2,
+		Message:   "SLSA level 2 is below the required level 3",
+		CoreResults: []*slsa.ControlResult{
+			{ID: "a", SLSALevel: 1, Status: slsa.StatusPass},
+			{ID: "b", SLSALevel: 2, Status: slsa.StatusPass},
+		},
+	}
+	var buf bytes.Buffer
+	printResult(&buf, res, false)
+	out := buf.String()
+	assert.True(t, strings.HasPrefix(out, "FAIL\nSLSA Level: 2\nSLSA level 2 is below the required level 3\n"), out)
+}

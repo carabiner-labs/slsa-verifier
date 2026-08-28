@@ -33,6 +33,9 @@ func printResult(w io.Writer, result *slsa.Result, verbose bool) {
 			writef(w, "SLSA Level: %d\n", result.SLSALevel)
 		}
 	}
+	if result.Message != "" {
+		writef(w, "%s\n", result.Message)
+	}
 	writef(w, "\n")
 
 	printLayer(w, "Core", result.CoreResults, verbose)

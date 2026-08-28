@@ -14,6 +14,10 @@ func pass(id string, level int) *ControlResult {
 	return &ControlResult{ID: id, SLSALevel: level, Status: StatusPass}
 }
 
+func skip(id string, level int) *ControlResult {
+	return &ControlResult{ID: id, SLSALevel: level, Status: StatusSkipped}
+}
+
 func fail(id string, level int) *ControlResult {
 	return &ControlResult{ID: id, SLSALevel: level, Status: StatusFail}
 }
@@ -180,6 +184,62 @@ func TestComputeResultMinLevel(t *testing.T) {
 	)
 	require.NoError(t, err)
 	assert.Equal(t, StatusFail, r.Status)
+}
+
+// Requiring a level means reaching it: a computed level below MinLevel
+// fails the run even when no control failed, which is what happens when
+// the controls at the required level are skipped or not declared.
+func TestComputeResultMinLevelMustBeReached(t *testing.T) {
+	t.Parallel()
+
+	impl := &defaultImplementation{}
+
+	// Level 4 controls skipped: the level tops out at 3.
+	r, err := impl.ComputeResult(
+		&VerificationOptions{MinLevel: 4},
+		[]*ControlResult{pass("a", 1), pass("b", 2), pass("c", 3), skip("d", 4)},
+		nil,
+		nil,
+	)
+	require.NoError(t, err)
+	assert.Equal(t, StatusFail, r.Status)
+	assert.Equal(t, 3, r.SLSALevel)
+	assert.Equal(t, "SLSA level 3 is below the required level 4", r.Message)
+
+	// No level 4 control declared at all.
+	r, err = impl.ComputeResult(
+		&VerificationOptions{MinLevel: 4},
+		[]*ControlResult{pass("a", 1), pass("b", 2), pass("c", 3)},
+		nil,
+		nil,
+	)
+	require.NoError(t, err)
+	assert.Equal(t, StatusFail, r.Status)
+	assert.Equal(t, 3, r.SLSALevel)
+
+	// Everything skipped: level 0, which is below any requirement.
+	r, err = impl.ComputeResult(
+		&VerificationOptions{MinLevel: 2},
+		[]*ControlResult{skip("a", 1), skip("b", 2)},
+		nil,
+		nil,
+	)
+	require.NoError(t, err)
+	assert.Equal(t, StatusFail, r.Status)
+	assert.Equal(t, 0, r.SLSALevel)
+	assert.Contains(t, r.Message, "level 0 is below the required level 2")
+
+	// Reaching the minimum exactly passes, with no message.
+	r, err = impl.ComputeResult(
+		&VerificationOptions{MinLevel: 3},
+		[]*ControlResult{pass("a", 1), pass("b", 2), pass("c", 3), skip("d", 4)},
+		nil,
+		nil,
+	)
+	require.NoError(t, err)
+	assert.Equal(t, StatusPass, r.Status)
+	assert.Equal(t, 3, r.SLSALevel)
+	assert.Empty(t, r.Message)
 }
 
 func TestComputeResultAllEmpty(t *testing.T) {

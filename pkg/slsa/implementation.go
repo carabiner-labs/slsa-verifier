@@ -299,7 +299,8 @@ func (d *defaultImplementation) evaluateControl(
 // verification result. Status is PASS only when no control failed or
 // errored across all three layers; with opts.MinLevel set, core controls
 // declared above the minimum level are informative and their failure
-// only caps the computed level. The SLSA level is the highest
+// only caps the computed level, while the computed level itself must
+// reach the minimum or the run fails. The SLSA level is the highest
 // consecutive level (1..4) for which every core control declaring that
 // level passed; levels with no declared controls are skipped (treated as
 // trivially achieved as long as the chain is unbroken).
@@ -341,6 +342,14 @@ func (*defaultImplementation) ComputeResult(opts *VerificationOptions, coreResul
 	}
 
 	r.SLSALevel = computeSLSALevel(coreResults)
+
+	// Requiring a level means reaching it. Controls at the required
+	// level that were skipped or never declared do not fail on their
+	// own, so the computed level is the only thing that can tell.
+	if minLevel > 0 && r.SLSALevel < minLevel {
+		r.Status = StatusFail
+		r.Message = fmt.Sprintf("SLSA level %d is below the required level %d", r.SLSALevel, minLevel)
+	}
 	return r, nil
 }
 

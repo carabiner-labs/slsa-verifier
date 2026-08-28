@@ -40,6 +40,11 @@ type Result struct {
 	// SLSALevel is the highest SLSA level whose required core controls all passed.
 	SLSALevel int
 
+	// Message explains a failing Status that is not attributable to a
+	// single control, such as the computed level falling short of the
+	// required minimum. Empty otherwise.
+	Message string
+
 	// VerifierID is the identity of the entity that performed the
 	// verification, copied from VerificationOptions.VerifierID. It is used
 	// as verifier.id when a VSA is emitted from this result.

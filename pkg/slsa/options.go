@@ -106,11 +106,12 @@ type VerificationOptions struct {
 	SpecVersion string
 
 	// MinLevel is the SLSA level the attestation is required to reach.
-	// When set (> 0), core controls declared above it are informative:
-	// their failure caps the computed level but does not fail the run.
-	// Zero (the default) keeps the strict semantics where every
-	// applicable control must pass. Controls without a declared level,
-	// buildType controls and user controls are always required.
+	// When set (> 0), the run fails unless the computed level reaches
+	// it, and core controls declared above it are informative: their
+	// failure caps the computed level but does not fail the run. Zero
+	// (the default) keeps the strict semantics where every applicable
+	// control must pass. Controls without a declared level, buildType
+	// controls and user controls are always required.
 	MinLevel int
 }
 
@@ -223,10 +224,11 @@ func WithSpecVersion(version string) VerificationOption {
 }
 
 // WithMinLevel sets the SLSA level the attestation must reach for the
-// verification to pass. Core controls declared above the minimum level
-// become informative: when they fail they cap the computed SLSA level
-// without failing the run. Zero (the default) requires every applicable
-// control to pass regardless of level.
+// verification to pass: a computed level below it fails the run. Core
+// controls declared above the minimum level become informative: when
+// they fail they cap the computed SLSA level without failing the run.
+// Zero (the default) requires every applicable control to pass
+// regardless of level.
 func WithMinLevel(level int) VerificationOption {
 	return func(o *VerificationOptions) error {
 		o.MinLevel = level
