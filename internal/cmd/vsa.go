@@ -278,6 +278,7 @@ func runVSA(cmd *cobra.Command, opts *vsaOptions) error {
 	}
 	libOpts := opts.toLibOptions()
 	libOpts.Subjects = expected
+	libOpts.NoGitDigestAliases = !opts.shared.GitDigestAliases
 	result, err := v.VerifyVSA(cmd.Context(), env, libOpts)
 	if err != nil {
 		return err

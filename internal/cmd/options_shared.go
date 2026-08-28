@@ -23,6 +23,12 @@ type sharedOptions struct {
 	// the verifier has no key or trust material to check is reported
 	// as an execution error rather than a failed verification.
 	RequireSignatures bool
+
+	// GitDigestAliases makes git object digests (gitCommit and friends)
+	// interchangeable with the sha1 or sha256 hash they are when the
+	// attestation is bound to subjects. On by default;
+	// --git-digest-aliases=false requires the exact algorithm names.
+	GitDigestAliases bool
 }
 
 func (so *sharedOptions) AddFlags(cmd *cobra.Command) {
@@ -31,6 +37,12 @@ func (so *sharedOptions) AddFlags(cmd *cobra.Command) {
 	cmd.PersistentFlags().BoolVar(
 		&so.RequireSignatures, "require-signatures", false,
 		"fail verification if the statement is unsigned or its signature did not verify",
+	)
+	cmd.PersistentFlags().BoolVar(
+		&so.GitDigestAliases, "git-digest-aliases", true,
+		"when matching subjects, treat gitCommit and other git digests as the sha1 or sha256 "+
+			"hash they are, so sha1:<sha> matches gitCommit:<sha> and vice versa; "+
+			"pass --git-digest-aliases=false to require exact algorithm names",
 	)
 }
 

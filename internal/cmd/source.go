@@ -379,6 +379,7 @@ func runSource(cmd *cobra.Command, opts *sourceOptions) error {
 		cmd.Context(),
 		stmt,
 		slsa.WithSubjects(opts.subjects()),
+		slsa.WithGitDigestAliases(opts.shared.GitDigestAliases),
 		slsa.WithParams(opts.shared.Params),
 		slsa.WithRequireSignatures(opts.shared.RequireSignatures),
 		slsa.WithExpectedSigners(opts.Signers),

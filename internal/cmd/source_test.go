@@ -216,6 +216,7 @@ func TestRunSourceSubject(t *testing.T) {
 	for _, tc := range []struct {
 		name       string
 		spec, arg  string
+		aliases    bool
 		wantPass   bool
 		wantOutput []string
 	}{
@@ -223,11 +224,14 @@ func TestRunSourceSubject(t *testing.T) {
 		{name: "commit via --subject", spec: "gitCommit:" + sha, wantPass: true, wantOutput: []string{"Subjects:", "[PASS]", "gitCommit:" + sha[:16]}},
 		{name: "commit via positional bare sha", arg: sha, wantPass: true, wantOutput: []string{"[PASS]"}},
 		{name: "another commit fails", arg: strings.Repeat("00", 20), wantPass: false, wantOutput: []string{"[FAIL]", "does not match", "1 of 1 expected subjects not found"}},
+		// A sha1 is the same hash as the gitCommit, but only with aliases on.
+		{name: "sha1 without aliases", spec: "sha1:" + sha, wantPass: false, wantOutput: []string{"[FAIL]", "no comparable digest", "gitCommit"}},
+		{name: "sha1 with aliases", spec: "sha1:" + sha, aliases: true, wantPass: true, wantOutput: []string{"[PASS]"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			opts := &sourceOptions{
-				shared:          &sharedOptions{},
+				shared:          &sharedOptions{GitDigestAliases: tc.aliases},
 				Level:           "1",
 				ExpectedRepo:    "https://github.com/example/repo",
 				ExpectedBranch:  "refs/heads/main",
@@ -253,4 +257,12 @@ func TestRunSourceSubject(t *testing.T) {
 			assert.True(t, strings.HasPrefix(out.String(), "FAIL"), out.String())
 		})
 	}
+}
+
+// The git digest aliases flag is on unless switched off.
+func TestSharedOptionsGitDigestAliasesDefaultOn(t *testing.T) {
+	t.Parallel()
+	shared := &sharedOptions{}
+	shared.AddFlags(&cobra.Command{})
+	assert.True(t, shared.GitDigestAliases)
 }

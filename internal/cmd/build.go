@@ -180,6 +180,7 @@ func runBuild(cmd *cobra.Command, opts *buildOptions) error {
 		cmd.Context(),
 		stmt,
 		slsa.WithSubjects(expected),
+		slsa.WithGitDigestAliases(opts.shared.GitDigestAliases),
 		slsa.WithParams(opts.shared.Params),
 		slsa.WithRequireSignatures(opts.shared.RequireSignatures),
 		slsa.WithExpectedSigners(opts.Signers),

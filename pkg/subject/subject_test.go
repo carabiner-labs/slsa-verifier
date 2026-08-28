@@ -143,3 +143,59 @@ func TestMatchAll(t *testing.T) {
 	assert.False(t, matches[1].Matched)
 	assert.True(t, AllMatched(nil))
 }
+
+// Git digest aliases are on by default.
+func TestMatchAllGitDigestAliasesDefaultOn(t *testing.T) {
+	t.Parallel()
+	sha1 := strings.Repeat("ab", 20)
+	matches := MatchAll([]*Expected{{Name: "x", Digests: map[string]string{"sha1": sha1}}},
+		[]attestation.Subject{rd(map[string]string{"gitCommit": sha1})})
+	require.Len(t, matches, 1)
+	assert.True(t, matches[0].Matched)
+}
+
+// With git digest aliases, a git object digest and the hash it is meet
+// in either direction; without them they are different algorithms.
+func TestMatchAllGitDigestAliases(t *testing.T) {
+	t.Parallel()
+	sha1 := strings.Repeat("ab", 20)
+	digest256 := strings.Repeat("cd", 32)
+	commit := []attestation.Subject{rd(map[string]string{"gitCommit": sha1})}
+	commit256 := []attestation.Subject{rd(map[string]string{"gitCommit": digest256})}
+	plainSHA1 := []attestation.Subject{rd(map[string]string{"sha1": sha1})}
+
+	for _, tc := range []struct {
+		name     string
+		expected map[string]string
+		subjects []attestation.Subject
+		aliases  bool
+		matched  bool
+	}{
+		{"sha1 meets gitCommit", map[string]string{"sha1": sha1}, commit, true, true},
+		{"gitCommit meets sha1", map[string]string{"gitCommit": sha1}, plainSHA1, true, true},
+		{"sha256 meets a sha256-repo gitCommit", map[string]string{"sha256": digest256}, commit256, true, true},
+		{"gitTree meets gitCommit of the same hash", map[string]string{"gitTree": sha1}, commit, true, true},
+		{"different sha1 still fails", map[string]string{"sha1": strings.Repeat("ef", 20)}, commit, true, false},
+		{"without aliases sha1 and gitCommit are unrelated", map[string]string{"sha1": sha1}, commit, false, false},
+		{"without aliases gitCommit and sha1 are unrelated", map[string]string{"gitCommit": sha1}, plainSHA1, false, false},
+		// A stated algorithm is never overridden by an alias: the
+		// subject says sha1 is something else, so they disagree.
+		{
+			name:     "stated sha1 wins over the alias",
+			expected: map[string]string{"sha1": sha1},
+			subjects: []attestation.Subject{rd(map[string]string{"gitCommit": sha1, "sha1": strings.Repeat("ef", 20)})},
+			aliases:  true,
+			matched:  false,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			matches := MatchAll([]*Expected{{Name: "x", Digests: tc.expected}}, tc.subjects, WithGitDigestAliases(tc.aliases))
+			require.Len(t, matches, 1)
+			assert.Equal(t, tc.matched, matches[0].Matched, matches[0].Message)
+			if tc.matched {
+				assert.Same(t, tc.subjects[0], matches[0].Subject, "the original subject is reported, not the aliased view")
+			}
+		})
+	}
+}

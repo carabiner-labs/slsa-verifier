@@ -54,7 +54,10 @@ type VerifierBinding struct {
 //     to be about. Every one must match a VSA subject (sharing at
 //     least one digest algorithm and agreeing on every shared one) or
 //     the result fails; each outcome is reported in VSAResult.Subjects.
-//     Empty binds the VSA to nothing.
+//     Empty binds the VSA to nothing. By default a sha1 or sha256 digest
+//     meets a git object digest of the same hash; NoGitDigestAliases
+//     requires the exact algorithm names (see
+//     subject.WithGitDigestAliases).
 //   - Levels is OR-matched against VSA.VerifiedLevels — at least one
 //     listed level must be satisfied. For canonical SLSA level
 //     strings (e.g. SLSA_BUILD_LEVEL_3) the match is "at-or-above":
@@ -67,14 +70,15 @@ type VerifierBinding struct {
 //     VSA.DependencyLevels (count values are not consulted).
 //     Skipped when empty.
 type VSAOptions struct {
-	Verifiers    []VerifierBinding
-	Signers      []*sapi.Identity
-	AllowUnbound bool
-	Subjects     []*subject.Expected
-	Levels       []string
-	Resource     string
-	Policy       string
-	Dependencies []string
+	Verifiers          []VerifierBinding
+	Signers            []*sapi.Identity
+	AllowUnbound       bool
+	Subjects           []*subject.Expected
+	NoGitDigestAliases bool
+	Levels             []string
+	Resource           string
+	Policy             string
+	Dependencies       []string
 }
 
 // binding returns the accepted verifier matching id, if any.
@@ -231,7 +235,7 @@ func (*Verifier) VerifyVSA(_ context.Context, env Envelope, opts *VSAOptions) (*
 	}
 	result := &VSAResult{VSA: v, Checks: checks, Signers: recordedSigners(env.GetVerification())}
 	if len(opts.Subjects) > 0 {
-		result.Subjects = subject.MatchAll(opts.Subjects, stmt.GetSubjects())
+		result.Subjects = subject.MatchAll(opts.Subjects, stmt.GetSubjects(), subject.WithGitDigestAliases(!opts.NoGitDigestAliases))
 	}
 	return result, nil
 }

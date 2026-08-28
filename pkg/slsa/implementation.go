@@ -160,7 +160,7 @@ func (*defaultImplementation) CheckSubjects(_ context.Context, opts *Verificatio
 	if statement == nil {
 		return nil, errors.New("statement is required to check subjects")
 	}
-	return subject.MatchAll(opts.Subjects, statement.GetSubjects()), nil
+	return subject.MatchAll(opts.Subjects, statement.GetSubjects(), subject.WithGitDigestAliases(!opts.NoGitDigestAliases)), nil
 }
 
 // ResolveCategory routes the statement to a catalog category. The track

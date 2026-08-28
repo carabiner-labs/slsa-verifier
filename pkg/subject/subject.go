@@ -162,36 +162,104 @@ type Match struct {
 	Message string
 }
 
+// MatchOption tunes how expected subjects are compared with the
+// attestation's.
+type MatchOption func(*matchOptions)
+
+type matchOptions struct {
+	gitDigestAliases bool
+}
+
+// WithGitDigestAliases controls whether the git object digests (gitCommit,
+// gitTree, gitBlob, gitTag) are interchangeable with the hash they are: a
+// 40-character git digest is also a sha1 digest and a 64-character one is
+// also a sha256 digest, on both sides of the comparison, so sha1:<sha>
+// matches an attestation subject carrying gitCommit:<sha> and the other
+// way around. An algorithm a subject already states is never overridden.
+// On by default; pass false to require the exact algorithm names.
+func WithGitDigestAliases(enabled bool) MatchOption {
+	return func(o *matchOptions) { o.gitDigestAliases = enabled }
+}
+
 // MatchAll looks for every expected subject among subjects and reports
 // each outcome in order. Matching follows attestation.SubjectsMatch:
 // a subject matches when it shares at least one digest algorithm with
 // the expected subject and every shared digest is equal.
-func MatchAll(expected []*Expected, subjects []attestation.Subject) []Match {
+func MatchAll(expected []*Expected, subjects []attestation.Subject, opts ...MatchOption) []Match {
+	o := matchOptions{gitDigestAliases: true}
+	for _, fn := range opts {
+		fn(&o)
+	}
 	out := make([]Match, 0, len(expected))
 	for _, e := range expected {
-		out = append(out, matchOne(e, subjects))
+		out = append(out, matchOne(e, subjects, &o))
 	}
 	return out
 }
 
-func matchOne(e *Expected, subjects []attestation.Subject) Match {
+// gitDigestAliases returns a copy of digests where every git object
+// digest is also present under the hash algorithm it is (sha1 or
+// sha256, by length), unless that algorithm is already stated.
+func gitDigestAliases(digests map[string]string) map[string]string {
+	out := make(map[string]string, len(digests)+2)
+	for algo, digest := range digests {
+		out[algo] = digest
+	}
+	for algo, digest := range digests {
+		if isContentHash(intoto.HashAlgorithm(algo)) || algo == string(intoto.AlgorithmDirHash) {
+			continue
+		}
+		var hash intoto.HashAlgorithm
+		switch len(digest) {
+		case 2 * intoto.AlgorithmSHA1.HexLength():
+			hash = intoto.AlgorithmSHA1
+		case 2 * intoto.AlgorithmSHA256.HexLength():
+			hash = intoto.AlgorithmSHA256
+		default:
+			continue
+		}
+		if _, stated := out[string(hash)]; !stated {
+			out[string(hash)] = digest
+		}
+	}
+	return out
+}
+
+// aliased wraps an attestation subject with git digest aliases applied
+// for comparison; the original subject is what gets reported.
+type aliased struct {
+	attestation.Subject
+	digests map[string]string
+}
+
+func (a *aliased) GetDigest() map[string]string { return a.digests }
+
+func matchOne(e *Expected, subjects []attestation.Subject, o *matchOptions) Match {
 	m := Match{Expected: e}
 	if len(subjects) == 0 {
 		m.Message = "the attestation has no subjects"
 		return m
+	}
+	want := e
+	if o.gitDigestAliases {
+		want = &Expected{Name: e.Name, Digests: gitDigestAliases(e.Digests)}
 	}
 	sharesAlgorithm := false
 	for _, s := range subjects {
 		if s == nil {
 			continue
 		}
-		if attestation.SubjectsMatch(e, s) {
+		got := s
+		if o.gitDigestAliases {
+			got = &aliased{Subject: s, digests: gitDigestAliases(s.GetDigest())}
+		}
+		if attestation.SubjectsMatch(want, got) {
 			m.Matched = true
 			m.Subject = s
 			return m
 		}
-		for algo := range e.Digests {
-			if _, ok := s.GetDigest()[algo]; ok {
+		for algo := range want.GetDigest() {
+			if _, ok := got.GetDigest()[algo]; ok {
 				sharesAlgorithm = true
 			}
 		}

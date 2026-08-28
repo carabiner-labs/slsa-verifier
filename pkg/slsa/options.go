@@ -87,6 +87,12 @@ type VerificationOptions struct {
 	// its content alone.
 	Subjects []*subject.Expected
 
+	// NoGitDigestAliases requires exact digest algorithm names when
+	// matching Subjects. By default git object digests (gitCommit,
+	// gitTree, …) are interchangeable with the sha1 or sha256 hash they
+	// are. See subject.WithGitDigestAliases.
+	NoGitDigestAliases bool
+
 	// ForceTrack overrides the catalog's predicate-type to track
 	// resolution. Empty means "auto" (the catalog must associate the
 	// predicate type with exactly one track). When set to a track
@@ -189,6 +195,17 @@ func WithExpectedSigners(ids []*sapi.Identity) VerificationOption {
 func WithSubjects(expected []*subject.Expected) VerificationOption {
 	return func(o *VerificationOptions) error {
 		o.Subjects = slices.Clone(expected)
+		return nil
+	}
+}
+
+// WithGitDigestAliases controls whether an expected sha1 or sha256
+// digest matches a statement subject carrying it as a git object digest,
+// and the other way around. On by default; pass false to require the
+// exact algorithm names.
+func WithGitDigestAliases(enabled bool) VerificationOption {
+	return func(o *VerificationOptions) error {
+		o.NoGitDigestAliases = !enabled
 		return nil
 	}
 }
