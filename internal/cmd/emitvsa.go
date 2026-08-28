@@ -21,10 +21,10 @@ import (
 const verifierID = "https://github.com/slsa-framework/verifier"
 
 // emitVSA writes an unsigned VSA v1 statement describing result to w. The
-// statement records the computed SLSA level (as verifiedLevels for the
-// given track), the overall PASSED/FAILED outcome, and the subjects of
-// the verified attestation. It is the shared output path for the build
-// and source verifiers when their --vsa flag is set.
+// statement records the overall PASSED/FAILED outcome, the computed SLSA
+// level (as verifiedLevels for the given track) when the run passed, and
+// the subjects of the verified attestation. It is the shared output path
+// for the build and source verifiers when their --vsa flag is set.
 func emitVSA(w io.Writer, stmt cdattestation.Statement, result *slsa.Result, track controls.Track) error {
 	subjects := vsaSubjects(stmt)
 	// Prefer the identity carried on the result (set through
@@ -39,7 +39,7 @@ func emitVSA(w io.Writer, stmt cdattestation.Statement, result *slsa.Result, tra
 		TimeVerified:       time.Now(),
 		Subjects:           subjects,
 		VerificationResult: vsaResult(result),
-		VerifiedLevels:     verifiedLevels(track, result.SLSALevel),
+		VerifiedLevels:     verifiedLevels(track, result),
 		SLSAVersion:        result.SpecVersion,
 	}
 	// Use the first subject's URI as the resource the VSA covers, when one
@@ -70,12 +70,17 @@ func vsaResult(result *slsa.Result) string {
 }
 
 // verifiedLevels renders the computed SLSA level as the canonical
-// verifiedLevels entry for the track, eg SLSA_BUILD_LEVEL_3. A
-// non-positive level (nothing established) yields an empty list.
-func verifiedLevels(track controls.Track, level int) []string {
-	if level <= 0 {
+// verifiedLevels entry for the track, eg SLSA_BUILD_LEVEL_3. A failed
+// run yields an empty list whatever level its core controls reached:
+// verifiedLevels is what the verifier vouches for, and consumers read
+// it on its own, so a FAILED summary must not carry a level a policy
+// could accept. A non-positive level (nothing established) is empty
+// too.
+func verifiedLevels(track controls.Track, result *slsa.Result) []string {
+	if !result.Pass() || result.SLSALevel <= 0 {
 		return nil
 	}
+	level := result.SLSALevel
 	prefix := "SLSA_BUILD_LEVEL_"
 	if track == controls.TrackSource {
 		prefix = "SLSA_SOURCE_LEVEL_"
