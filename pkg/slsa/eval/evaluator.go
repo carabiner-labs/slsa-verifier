@@ -93,10 +93,15 @@ func (e *Evaluator) Evaluate(
 //   - subjects:  list of in-toto ResourceDescriptor.
 //   - params:    map<string, dyn> for caller-supplied check parameters.
 //   - semverMatches(expected, tag): see VersionedTagMatches.
+//   - CEL optional types, for fields a producer may omit.
 func buildEnv(predicate proto.Message) (*cel.Env, error) {
 	predicateName := string(predicate.ProtoReflect().Descriptor().FullName())
 	subjectName := string((&intoto.ResourceDescriptor{}).ProtoReflect().Descriptor().FullName())
 	return cel.NewEnv(
+		// Optional types (a.?b.orValue(x), list[?0], optional.of…) let
+		// controls read fields a producer may have omitted without
+		// chains of has() guards.
+		cel.OptionalTypes(),
 		// Allow accessing proto fields by their JSON (camelCase) name so
 		// that expressions in YAML controls match the SLSA spec wording.
 		cel.JSONFieldNames(true),

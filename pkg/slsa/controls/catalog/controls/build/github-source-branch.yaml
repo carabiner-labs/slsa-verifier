@@ -8,6 +8,8 @@
 # buildDefinition.internalParameters.GITHUB_* for v1 provenance, and
 # buildDefinition.externalParameters.workflow.ref for GitHub attestations
 # — and compare it with the caller's expectations, given as --param.
+# Fields a builder may omit are read with CEL optionals (a.?b.orValue),
+# so a missing field reads as empty instead of erroring.
 # Each expectation is optional: a control whose parameter is not set is
 # skipped. With none of them set the verifier refuses to run, so a
 # builder the catalog knows is never verified with no expectation stated.
@@ -31,17 +33,14 @@ checks:
       - https://github.com/slsa-framework/slsa-github-generator@v1
       - https://github.com/slsa-framework/slsa-github-generator/container@v1
     expression: >-
-      has(predicate.invocation.environment.github_ref_type) && (
-        (predicate.invocation.environment.github_ref_type == "branch" && predicate.invocation.environment.github_ref in ["refs/heads/" + string(params.expected_branch), string(params.expected_branch)])
-        || (predicate.invocation.environment.github_ref_type == "tag" && (
-          (has(predicate.invocation.environment.github_base_ref) && predicate.invocation.environment.github_base_ref != "" && predicate.invocation.environment.github_base_ref in ["refs/heads/" + string(params.expected_branch), string(params.expected_branch)])
-          || (has(predicate.invocation.environment.github_event_name) && predicate.invocation.environment.github_event_name == "push"
-              && has(predicate.invocation.environment.github_event_payload.base_ref) && predicate.invocation.environment.github_event_payload.base_ref in ["refs/heads/" + string(params.expected_branch), string(params.expected_branch)])
-          || (has(predicate.invocation.environment.github_event_name) && predicate.invocation.environment.github_event_name == "release"
-              && has(predicate.invocation.environment.github_event_payload.release.target_commitish)
-              && ("refs/heads/" + string(predicate.invocation.environment.github_event_payload.release.target_commitish)) in ["refs/heads/" + string(params.expected_branch), string(params.expected_branch)])
-        ))
-      )
+      (predicate.invocation.environment.?github_ref_type.orValue("") == "branch" && predicate.invocation.environment.?github_ref.orValue("") in ["refs/heads/" + string(params.expected_branch), string(params.expected_branch)])
+      || (predicate.invocation.environment.?github_ref_type.orValue("") == "tag"
+          && optional.ofNonZeroValue(predicate.invocation.environment.?github_base_ref.orValue(""))
+             .or(predicate.invocation.environment.?github_event_name.orValue("") == "push" ? predicate.invocation.environment.?github_event_payload.?base_ref : optional.none())
+             .or(predicate.invocation.environment.?github_event_name.orValue("") == "release"
+                 ? optional.ofNonZeroValue(predicate.invocation.environment.?github_event_payload.?release.?target_commitish.orValue("")).optMap(c, "refs/heads/" + string(c))
+                 : optional.none())
+             .orValue("") in ["refs/heads/" + string(params.expected_branch), string(params.expected_branch)])
     optionalParameters:
       - expected_branch
   - predicateType: https://slsa.dev/provenance/v1
@@ -51,23 +50,20 @@ checks:
       - https://slsa.dev/container-based-build/v0.1
       - https://slsa.dev/container-based-build/v0.1?draft
     expression: >-
-      has(predicate.buildDefinition.internalParameters.GITHUB_REF_TYPE) && (
-        (predicate.buildDefinition.internalParameters.GITHUB_REF_TYPE == "branch" && predicate.buildDefinition.internalParameters.GITHUB_REF in ["refs/heads/" + string(params.expected_branch), string(params.expected_branch)])
-        || (predicate.buildDefinition.internalParameters.GITHUB_REF_TYPE == "tag" && (
-          (has(predicate.buildDefinition.internalParameters.GITHUB_BASE_REF) && predicate.buildDefinition.internalParameters.GITHUB_BASE_REF != "" && predicate.buildDefinition.internalParameters.GITHUB_BASE_REF in ["refs/heads/" + string(params.expected_branch), string(params.expected_branch)])
-          || (has(predicate.buildDefinition.internalParameters.GITHUB_EVENT_NAME) && predicate.buildDefinition.internalParameters.GITHUB_EVENT_NAME == "push"
-              && has(predicate.buildDefinition.internalParameters.GITHUB_EVENT_PAYLOAD.base_ref) && predicate.buildDefinition.internalParameters.GITHUB_EVENT_PAYLOAD.base_ref in ["refs/heads/" + string(params.expected_branch), string(params.expected_branch)])
-          || (has(predicate.buildDefinition.internalParameters.GITHUB_EVENT_NAME) && predicate.buildDefinition.internalParameters.GITHUB_EVENT_NAME == "release"
-              && has(predicate.buildDefinition.internalParameters.GITHUB_EVENT_PAYLOAD.release.target_commitish)
-              && ("refs/heads/" + string(predicate.buildDefinition.internalParameters.GITHUB_EVENT_PAYLOAD.release.target_commitish)) in ["refs/heads/" + string(params.expected_branch), string(params.expected_branch)])
-        ))
-      )
+      (predicate.buildDefinition.internalParameters.?GITHUB_REF_TYPE.orValue("") == "branch" && predicate.buildDefinition.internalParameters.?GITHUB_REF.orValue("") in ["refs/heads/" + string(params.expected_branch), string(params.expected_branch)])
+      || (predicate.buildDefinition.internalParameters.?GITHUB_REF_TYPE.orValue("") == "tag"
+          && optional.ofNonZeroValue(predicate.buildDefinition.internalParameters.?GITHUB_BASE_REF.orValue(""))
+             .or(predicate.buildDefinition.internalParameters.?GITHUB_EVENT_NAME.orValue("") == "push" ? predicate.buildDefinition.internalParameters.?GITHUB_EVENT_PAYLOAD.?base_ref : optional.none())
+             .or(predicate.buildDefinition.internalParameters.?GITHUB_EVENT_NAME.orValue("") == "release"
+                 ? optional.ofNonZeroValue(predicate.buildDefinition.internalParameters.?GITHUB_EVENT_PAYLOAD.?release.?target_commitish.orValue("")).optMap(c, "refs/heads/" + string(c))
+                 : optional.none())
+             .orValue("") in ["refs/heads/" + string(params.expected_branch), string(params.expected_branch)])
     optionalParameters:
       - expected_branch
   - predicateType: https://slsa.dev/provenance/v1
     buildTypes:
       - https://actions.github.io/buildtypes/workflow/v1
     expression: >-
-      has(predicate.buildDefinition.externalParameters.workflow.ref) && predicate.buildDefinition.externalParameters.workflow.ref in ["refs/heads/" + string(params.expected_branch), string(params.expected_branch)]
+      predicate.buildDefinition.externalParameters.?workflow.?ref.orValue("") in ["refs/heads/" + string(params.expected_branch), string(params.expected_branch)]
     optionalParameters:
       - expected_branch
