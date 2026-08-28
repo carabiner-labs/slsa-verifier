@@ -5,6 +5,8 @@ package slsa_test
 
 import (
 	"context"
+	"encoding/json"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -378,4 +380,71 @@ func TestVerifySourceFixtureEnforcedSince(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, slsa.StatusPass, res.Status)
 	assert.Equal(t, 1, res.SLSALevel)
+}
+
+// TestVerifySourceFixtureMissingSinceFails confirms a control listed
+// without a since timestamp does not count: the window during which it
+// was enforced cannot be established, with or without --since. An
+// explicit epoch (the fixture's provenance control) is still a value and
+// still counts.
+func TestVerifySourceFixtureMissingSinceFails(t *testing.T) {
+	t.Parallel()
+
+	raw, err := os.ReadFile(filepath.Join("testdata", "plain", "source.intoto.json"))
+	require.NoError(t, err)
+	var doc map[string]any
+	require.NoError(t, json.Unmarshal(raw, &doc))
+	predicate, ok := doc["predicate"].(map[string]any)
+	require.True(t, ok)
+	controls, ok := predicate["controls"].([]any)
+	require.True(t, ok)
+	stripped := 0
+	for _, c := range controls {
+		control, ok := c.(map[string]any)
+		require.True(t, ok)
+		if control["name"] == "SLSA_SOURCE_ORG_ACCESS_CONTROL" {
+			delete(control, "since")
+			stripped++
+		}
+	}
+	require.Equal(t, 1, stripped)
+	mutated, err := json.Marshal(doc)
+	require.NoError(t, err)
+	path := filepath.Join(t.TempDir(), "source-no-since.intoto.json")
+	require.NoError(t, os.WriteFile(path, mutated, 0o600))
+
+	envs, err := envelope.Parsers.ParseFiles([]string{path})
+	require.NoError(t, err)
+	require.Len(t, envs, 1)
+	stmt := envs[0].GetStatement()
+	require.NotNil(t, stmt)
+
+	v, err := slsa.New()
+	require.NoError(t, err)
+
+	for _, tc := range []struct {
+		name string
+		opts []slsa.VerificationOption
+	}{
+		{"without --since", nil},
+		{"with --since", []slsa.VerificationOption{slsa.WithParam("enforced_since", "2025-01-01T00:00:00Z")}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			res, err := v.Verify(context.Background(), stmt, tc.opts...)
+			require.NoError(t, err)
+			assert.Equal(t, slsa.StatusFail, res.Status)
+
+			var accessControl *slsa.ControlResult
+			for _, cr := range res.CoreResults {
+				if cr.ID == "source-control-org-access-control" {
+					accessControl = cr
+				}
+			}
+			require.NotNil(t, accessControl)
+			assert.Equal(t, slsa.StatusFail, accessControl.Status, "a control without since must not count")
+			// The L2 control failing caps the level at 1.
+			assert.Equal(t, 1, res.SLSALevel)
+		})
+	}
 }

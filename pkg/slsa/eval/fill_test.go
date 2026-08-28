@@ -10,6 +10,7 @@ import (
 	intoto "github.com/in-toto/attestation/go/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/encoding/protojson"
 
 	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/eval"
 )
@@ -86,4 +87,35 @@ func TestFillNilMessagesWalksRepeatedMessages(t *testing.T) {
 func TestFillNilMessagesNilSafe(t *testing.T) {
 	t.Parallel()
 	eval.FillNilMessages(nil) // must not panic
+}
+
+// Well-known types must stay unallocated so has() tells an absent
+// field from an explicit zero value, which for timestamps is a
+// legitimate "since forever".
+func TestFillNilMessagesLeavesWellKnownTypesUnset(t *testing.T) {
+	t.Parallel()
+	const predicateType = "https://github.com/slsa-framework/source-tool/source-provenance/v1"
+
+	predicate, ok := eval.NewPredicate(predicateType)
+	require.True(t, ok)
+	eval.FillNilMessages(predicate)
+
+	ev, err := eval.NewEvaluator()
+	require.NoError(t, err)
+
+	present, err := ev.Evaluate(predicateType, "has(predicate.createdOn)", predicate, nil, nil)
+	require.NoError(t, err)
+	assert.False(t, present, "an omitted timestamp must not read as present")
+
+	// The unset field still resolves to its default, so expressions
+	// that do not check presence keep evaluating.
+	epoch, err := ev.Evaluate(predicateType, `predicate.createdOn == timestamp("1970-01-01T00:00:00Z")`, predicate, nil, nil)
+	require.NoError(t, err)
+	assert.True(t, epoch)
+
+	require.NoError(t, protojson.Unmarshal([]byte(`{"createdOn": "1970-01-01T00:00:00Z"}`), predicate))
+	eval.FillNilMessages(predicate)
+	present, err = ev.Evaluate(predicateType, "has(predicate.createdOn)", predicate, nil, nil)
+	require.NoError(t, err)
+	assert.True(t, present, "an explicit epoch is present")
 }

@@ -14,10 +14,10 @@ checks:
   - predicateType: https://github.com/slsa-framework/slsa-source-poc/tag-provenance/v1-draft
     expression: >-
       predicate.controls.exists(c, c.name in ["SLSA_SOURCE_SCS_PROTECTED_REFS", "TAG_HYGIENE"]
-      && c.since <= predicate.createdOn
+      && has(c.since) && c.since <= predicate.createdOn
       && (!('enforced_since' in params) || c.since <= timestamp(string(params.enforced_since))))
   - predicateType: https://github.com/slsa-framework/source-tool/tag-provenance/v1
     expression: >-
       predicate.controls.exists(c, c.name in ["SLSA_SOURCE_SCS_PROTECTED_REFS", "TAG_HYGIENE"]
-      && c.since <= predicate.createdOn
+      && has(c.since) && c.since <= predicate.createdOn
       && (!('enforced_since' in params) || c.since <= timestamp(string(params.enforced_since))))

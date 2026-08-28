@@ -23,10 +23,11 @@ import (
 // Lists and maps of messages are walked so their entries are filled
 // recursively. Oneof cases are not auto-allocated (a oneof selects at
 // most one variant — automatically materialising one is wrong).
-// Well-known google.protobuf.* types (Struct, Value, ListValue, …) are
-// allocated but not recursed into; their own runtime semantics would
-// conflict with naive zero-filling and CEL handles them specially
-// already.
+// Well-known google.protobuf.* types (Struct, Value, Timestamp, …) are
+// left untouched: their own runtime semantics would conflict with
+// naive zero-filling, CEL resolves them to their defaults when unset,
+// and allocating them would make has() report an absent field as
+// present.
 func FillNilMessages(m proto.Message) {
 	if m == nil {
 		return
@@ -65,10 +66,16 @@ func fillReflect(msg protoreflect.Message) {
 				fillReflect(list.Get(j).Message())
 			}
 		case fd.Kind() == protoreflect.MessageKind || fd.Kind() == protoreflect.GroupKind:
-			sub := msg.Mutable(fd).Message()
-			if !isWellKnownType(sub.Descriptor()) {
-				fillReflect(sub)
+			// Well-known types are left unallocated so that has() keeps
+			// reporting whether the payload carried them: an allocated
+			// zero Timestamp reads as an explicit epoch, which is a
+			// legitimate value (source-tool emits it for "since forever")
+			// and must stay distinguishable from an absent field. CEL
+			// resolves an unset well-known field to its default anyway.
+			if isWellKnownType(fd.Message()) {
+				continue
 			}
+			fillReflect(msg.Mutable(fd).Message())
 		}
 	}
 }
