@@ -19,7 +19,9 @@ type sharedOptions struct {
 	keys.Options
 
 	// RequireSignatures, when true, fails verification if the statement
-	// is unsigned or its signature did not verify.
+	// is unsigned or its signature did not verify. A signed statement
+	// the verifier has no key or trust material to check is reported
+	// as an execution error rather than a failed verification.
 	RequireSignatures bool
 }
 

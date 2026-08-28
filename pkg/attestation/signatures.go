@@ -7,6 +7,8 @@ import (
 	"errors"
 	"fmt"
 
+	cdattestation "github.com/carabiner-dev/attestation"
+	sapi "github.com/carabiner-dev/signer/api/v1"
 	"github.com/carabiner-dev/signer/key"
 )
 
@@ -18,14 +20,21 @@ import (
 // problem.
 var ErrSignatureRequired = errors.New("envelope is unsigned and signatures are required")
 
+// ErrSignatureUnverifiable is returned by VerifySignatures when the
+// envelope carries signatures but the verifier had nothing to check
+// them against: no --key for a DSSE envelope, or no configured
+// verifier for the bundle's kind. The signature was neither confirmed
+// nor refuted. Callers may treat it as a configuration problem rather
+// than a verification failure.
+var ErrSignatureUnverifiable = errors.New("envelope is signed but cannot be verified")
+
 // ErrSignatureUnverified is returned by VerifySignatures when the
-// envelope carries signatures but, after Verify, exposes no
-// verification result marked as verified. That happens when no key
-// or trust material was supplied to check the signatures against,
-// or when the material was supplied and none of the signatures
-// matched. Like ErrSignatureRequired it is a verification outcome,
-// not an execution error.
-var ErrSignatureUnverified = errors.New("envelope is signed but its signature was not verified and signatures are required")
+// envelope carries signatures that were checked against the available
+// key or trust material and did not verify. When the envelope records
+// a reason, the returned error wraps this sentinel and carries it.
+// Like ErrSignatureRequired it is a verification outcome, not an
+// execution error.
+var ErrSignatureUnverified = errors.New("envelope signature did not verify")
 
 // SignatureOptions parameterizes VerifySignatures. Keys are passed
 // to the envelope's Verify implementation; Required toggles the
@@ -38,9 +47,10 @@ type SignatureOptions struct {
 
 	// Required, when true, makes VerifySignatures return
 	// ErrSignatureRequired if the envelope carries zero signatures,
-	// and ErrSignatureUnverified if it carries signatures that did
-	// not produce a verified result. Use this to enforce a "must be
-	// signed and verified" policy.
+	// ErrSignatureUnverifiable if it carries signatures the verifier
+	// had no material to check, and ErrSignatureUnverified if the
+	// signatures were checked and did not verify. Use this to enforce
+	// a "must be signed and verified" policy.
 	Required bool
 }
 
@@ -57,13 +67,15 @@ type SignatureOptions struct {
 // implementation (signature/key mismatches, trust-root failures for
 // Sigstore bundles) always propagate.
 //
-// With opts.Required set, returns ErrSignatureRequired when the
-// envelope carries no signatures, and ErrSignatureUnverified when it
-// carries signatures but GetVerification reports no verified result.
-// The verdict is read from the envelope's Verification rather than
-// from the presence of signatures because envelope implementations
-// may record a failed verification as a result instead of returning
-// an error from Verify.
+// With opts.Required set, the verdict is read from the Verification the
+// envelope recorded rather than from the presence of signatures, since
+// envelope implementations record a failed verification as a result
+// instead of returning an error from Verify. It returns
+// ErrSignatureRequired when the envelope carries no signatures,
+// ErrSignatureUnverifiable when it carries signatures the verifier had
+// no key or trust material to check, and ErrSignatureUnverified — with
+// the recorded reason, when there is one — when they were checked and
+// did not verify.
 func (*Verifier) VerifySignatures(env Envelope, opts SignatureOptions) error {
 	if env == nil {
 		return errors.New("nil envelope")
@@ -77,8 +89,48 @@ func (*Verifier) VerifySignatures(env Envelope, opts SignatureOptions) error {
 	if len(env.GetSignatures()) == 0 {
 		return ErrSignatureRequired
 	}
-	if v := env.GetVerification(); v == nil || !v.GetVerified() {
-		return ErrSignatureUnverified
+	v := env.GetVerification()
+	if v != nil && v.GetVerified() {
+		return nil
 	}
-	return nil
+
+	status, reason := recordedStatus(v)
+	switch status {
+	case sapi.VerificationStatus_UNSIGNED:
+		return ErrSignatureRequired
+	case sapi.VerificationStatus_UNVERIFIABLE:
+		return withReason(ErrSignatureUnverifiable, reason)
+	case sapi.VerificationStatus_FAILED, sapi.VerificationStatus_UNSPECIFIED, sapi.VerificationStatus_VERIFIED:
+		// FAILED, or a verification that recorded no status (VERIFIED
+		// with GetVerified false cannot happen, but is not vouched for
+		// either): the signatures are there and nothing vouches for them.
+		return withReason(ErrSignatureUnverified, reason)
+	default:
+		return withReason(ErrSignatureUnverified, reason)
+	}
+}
+
+// recordedStatus returns the status and reason an envelope's Verification
+// recorded, when it carries them (the signer's api/v1 Verification does),
+// and VerificationStatus_UNSPECIFIED otherwise.
+func recordedStatus(v cdattestation.Verification) (status sapi.VerificationStatus, reason string) {
+	if v == nil {
+		return sapi.VerificationStatus_UNSPECIFIED, ""
+	}
+	sv, ok := v.(interface {
+		GetSignature() *sapi.SignatureVerification
+	})
+	if !ok || sv.GetSignature() == nil {
+		return sapi.VerificationStatus_UNSPECIFIED, ""
+	}
+	return sv.GetSignature().GetStatus(), sv.GetSignature().GetError()
+}
+
+// withReason wraps a verification outcome with the reason the envelope
+// recorded, when there is one.
+func withReason(outcome error, reason string) error {
+	if reason == "" {
+		return outcome
+	}
+	return fmt.Errorf("%w: %s", outcome, reason)
 }

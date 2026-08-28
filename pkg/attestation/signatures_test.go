@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	cdattestation "github.com/carabiner-dev/attestation"
+	sapi "github.com/carabiner-dev/signer/api/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -44,6 +45,16 @@ func (fakeSignature) GetSig() []byte   { return []byte("sig") }
 
 var oneSig = []cdattestation.Signature{fakeSignature{}}
 
+// recorded builds the Verification a collector envelope records for a
+// conclusion, as VerifyStatement returns it.
+func recorded(status sapi.VerificationStatus, reason string) *sapi.Verification {
+	return &sapi.Verification{Signature: &sapi.SignatureVerification{
+		Status:   status,
+		Verified: status == sapi.VerificationStatus_VERIFIED,
+		Error:    reason,
+	}}
+}
+
 func TestVerifySignaturesNilEnvelope(t *testing.T) {
 	t.Parallel()
 
@@ -59,6 +70,7 @@ func TestVerifySignaturesRequired(t *testing.T) {
 		sigs    []cdattestation.Signature
 		ver     cdattestation.Verification
 		wantErr error
+		wantMsg string // substring the error must carry, when set
 	}{
 		{
 			name: "unsigned",
@@ -92,6 +104,33 @@ func TestVerifySignaturesRequired(t *testing.T) {
 			sigs: oneSig, ver: &fakeVerification{verified: true},
 			wantErr: nil,
 		},
+		// Conclusions recorded by the collector carry a status and a
+		// reason; the outcome and its message follow them.
+		{
+			name: "recorded UNSIGNED",
+			sigs: oneSig, ver: recorded(sapi.VerificationStatus_UNSIGNED, "DSSE envelope has no signatures"),
+			wantErr: ErrSignatureRequired,
+		},
+		{
+			name: "recorded UNVERIFIABLE",
+			sigs: oneSig, ver: recorded(sapi.VerificationStatus_UNVERIFIABLE, "no public keys to verify the DSSE signatures against"),
+			wantErr: ErrSignatureUnverifiable, wantMsg: "no public keys to verify the DSSE signatures against",
+		},
+		{
+			name: "recorded FAILED",
+			sigs: oneSig, ver: recorded(sapi.VerificationStatus_FAILED, "none of the 1 signatures verified against the 1 supplied public keys"),
+			wantErr: ErrSignatureUnverified, wantMsg: "none of the 1 signatures verified",
+		},
+		{
+			name: "recorded FAILED without a reason",
+			sigs: oneSig, ver: recorded(sapi.VerificationStatus_FAILED, ""),
+			wantErr: ErrSignatureUnverified,
+		},
+		{
+			name: "recorded VERIFIED",
+			sigs: oneSig, ver: recorded(sapi.VerificationStatus_VERIFIED, ""),
+			wantErr: nil,
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -103,7 +142,15 @@ func TestVerifySignaturesRequired(t *testing.T) {
 				return
 			}
 			require.Error(t, err)
-			assert.ErrorIs(t, err, tc.wantErr, "expected %v, got %v", tc.wantErr, err)
+			require.ErrorIs(t, err, tc.wantErr, "expected %v, got %v", tc.wantErr, err)
+			for _, other := range []error{ErrSignatureRequired, ErrSignatureUnverifiable, ErrSignatureUnverified} {
+				if other != tc.wantErr { //nolint:errorlint // comparing sentinels by identity
+					require.NotErrorIs(t, err, other)
+				}
+			}
+			if tc.wantMsg != "" {
+				assert.Contains(t, err.Error(), tc.wantMsg)
+			}
 		})
 	}
 }
@@ -122,6 +169,8 @@ func TestVerifySignaturesNotRequired(t *testing.T) {
 		{name: "signed without verification result", sigs: oneSig, ver: nil},
 		{name: "signed but verification failed", sigs: oneSig, ver: &fakeVerification{verified: false}},
 		{name: "signed and verified", sigs: oneSig, ver: &fakeVerification{verified: true}},
+		{name: "recorded UNVERIFIABLE", sigs: oneSig, ver: recorded(sapi.VerificationStatus_UNVERIFIABLE, "no keys")},
+		{name: "recorded FAILED", sigs: oneSig, ver: recorded(sapi.VerificationStatus_FAILED, "bad sig")},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -143,6 +192,7 @@ func TestVerifySignaturesPropagatesEnvelopeError(t *testing.T) {
 		require.Error(t, err)
 		require.ErrorIs(t, err, want, "required=%v: expected wrapped envelope error, got %v", required, err)
 		require.NotErrorIs(t, err, ErrSignatureRequired)
+		require.NotErrorIs(t, err, ErrSignatureUnverifiable)
 		require.NotErrorIs(t, err, ErrSignatureUnverified)
 	}
 }

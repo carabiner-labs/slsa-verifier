@@ -145,9 +145,16 @@ func runVSA(cmd *cobra.Command, opts *vsaOptions) error {
 		Keys:     keys,
 		Required: opts.shared.RequireSignatures,
 	}); err != nil {
-		if errors.Is(err, attestation.ErrSignatureRequired) || errors.Is(err, attestation.ErrSignatureUnverified) {
+		switch {
+		case errors.Is(err, attestation.ErrSignatureRequired), errors.Is(err, attestation.ErrSignatureUnverified):
+			// A verification outcome: unsigned, or checked and refuted.
 			writef(cmd.OutOrStdout(), "%s\n  Signature: %s\n", redf("FAIL"), err)
 			return ErrVerifyFailed
+		case errors.Is(err, attestation.ErrSignatureUnverifiable):
+			// Not an outcome: the signature could not be checked at all.
+			// Surface it as an execution error so the missing material
+			// is not mistaken for a bad signature.
+			return fmt.Errorf("%w (DSSE envelopes need the signer's public key, pass it with --key)", err)
 		}
 		return err
 	}
