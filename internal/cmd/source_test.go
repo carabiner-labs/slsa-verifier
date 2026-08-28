@@ -20,7 +20,7 @@ func TestParseSourceLevel(t *testing.T) {
 		want    int
 		wantErr bool
 	}{
-		{"0", 0, false},
+		{"0", 0, true}, // no SLSA source level 0; would map to the strictest mode
 		{"1", 1, false},
 		{"4", 4, false},
 		{"SLSA_SOURCE_LEVEL_3", 3, false},

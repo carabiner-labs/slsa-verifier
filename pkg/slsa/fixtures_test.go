@@ -448,3 +448,89 @@ func TestVerifySourceFixtureMissingSinceFails(t *testing.T) {
 		})
 	}
 }
+
+// mutatedFixture loads a plain fixture, lets mutate edit its decoded
+// JSON, and parses the result back into a statement.
+func mutatedFixture(t *testing.T, name string, mutate func(predicate map[string]any)) attestation.Statement {
+	t.Helper()
+	raw, err := os.ReadFile(filepath.Join("testdata", "plain", name))
+	require.NoError(t, err)
+	var doc map[string]any
+	require.NoError(t, json.Unmarshal(raw, &doc))
+	predicate, ok := doc["predicate"].(map[string]any)
+	require.True(t, ok)
+	mutate(predicate)
+	data, err := json.Marshal(doc)
+	require.NoError(t, err)
+	path := filepath.Join(t.TempDir(), name)
+	require.NoError(t, os.WriteFile(path, data, 0o600))
+
+	envs, err := envelope.Parsers.ParseFiles([]string{path})
+	require.NoError(t, err)
+	require.Len(t, envs, 1)
+	stmt := envs[0].GetStatement()
+	require.NotNil(t, stmt)
+	return stmt
+}
+
+// TestVerifyTagFixtureLevelsFollowTheExpectedBranch confirms a tag's
+// inherited level comes from the summary covering the expected branch,
+// not from whichever summary happens to carry the highest level.
+func TestVerifyTagFixtureLevelsFollowTheExpectedBranch(t *testing.T) {
+	t.Parallel()
+
+	stmt := mutatedFixture(t, "tag.intoto.json", func(p map[string]any) {
+		p["vsaSummaries"] = []any{
+			map[string]any{"sourceRefs": []any{"refs/heads/main"}, "verifiedLevels": []any{"SLSA_SOURCE_LEVEL_1"}},
+			map[string]any{"sourceRefs": []any{"refs/heads/release"}, "verifiedLevels": []any{"SLSA_SOURCE_LEVEL_3"}},
+		}
+	})
+	v, err := slsa.New()
+	require.NoError(t, err)
+	base := []slsa.VerificationOption{
+		slsa.WithMinLevel(1),
+		slsa.WithParam("expected_source_repo", "https://github.com/example/repo"),
+		slsa.WithParam("expected_tag", "v1.2.3"),
+	}
+
+	// main was verified at L1 only: expecting main yields L1.
+	res, err := v.Verify(context.Background(), stmt, append(base, slsa.WithParam("expected_branch", "refs/heads/main"))...)
+	require.NoError(t, err)
+	assert.Equal(t, slsa.StatusPass, res.Status)
+	assert.Equal(t, 1, res.SLSALevel)
+
+	// Expecting release yields its L3.
+	res, err = v.Verify(context.Background(), stmt, append(base, slsa.WithParam("expected_branch", "refs/heads/release"))...)
+	require.NoError(t, err)
+	assert.Equal(t, 3, res.SLSALevel)
+
+	// Without an expected branch any summary may provide the level.
+	res, err = v.Verify(context.Background(), stmt, base...)
+	require.NoError(t, err)
+	assert.Equal(t, 3, res.SLSALevel)
+}
+
+// TestVerifyTagFixtureUnknownLevelDoesNotCount confirms level names are
+// matched exactly: an unknown SLSA_SOURCE_LEVEL_* entry attests nothing.
+func TestVerifyTagFixtureUnknownLevelDoesNotCount(t *testing.T) {
+	t.Parallel()
+
+	stmt := mutatedFixture(t, "tag.intoto.json", func(p map[string]any) {
+		p["vsaSummaries"] = []any{
+			map[string]any{"sourceRefs": []any{"refs/heads/main"}, "verifiedLevels": []any{"SLSA_SOURCE_LEVEL_FOO", "SLSA_SOURCE_LEVEL_10"}},
+		}
+	})
+	v, err := slsa.New()
+	require.NoError(t, err)
+	res, err := v.Verify(
+		context.Background(),
+		stmt,
+		slsa.WithMinLevel(1),
+		slsa.WithParam("expected_source_repo", "https://github.com/example/repo"),
+		slsa.WithParam("expected_branch", "refs/heads/main"),
+		slsa.WithParam("expected_tag", "v1.2.3"),
+	)
+	require.NoError(t, err)
+	assert.Equal(t, slsa.StatusFail, res.Status)
+	assert.Equal(t, 0, res.SLSALevel)
+}

@@ -88,7 +88,7 @@ func (o *sourceOptions) AddFlags(cmd *cobra.Command) {
 	o.vsaOutputOptions.AddFlags(cmd)
 	cmd.PersistentFlags().StringVar(
 		&o.Level, "level", "1",
-		"required SLSA source level (eg 3 or SLSA_SOURCE_LEVEL_3)",
+		"required SLSA source level, 1-4 (eg 3 or SLSA_SOURCE_LEVEL_3)",
 	)
 	cmd.PersistentFlags().StringVar(
 		&o.Spec, "spec", "",
@@ -195,20 +195,26 @@ func parseSinceDate(value string) (string, error) {
 	return "", fmt.Errorf("invalid --since date %q (want RFC3339 or YYYY-MM-DD)", value)
 }
 
-// parseSourceLevel parses the --level flag value: a bare number (0-4)
-// or a SLSA_SOURCE_LEVEL_N label.
+// parseSourceLevel parses the --level flag value: a bare number (1-4)
+// or a SLSA_SOURCE_LEVEL_N label. There is no SLSA source level 0, and
+// the library treats a zero minimum as "every applicable control must
+// pass" — the strictest mode, the opposite of what a "level 0" reads
+// as — so 0 is rejected rather than silently mapped to it.
 func parseSourceLevel(value string) (int, error) {
 	trimmed := strings.TrimPrefix(
 		strings.ToUpper(strings.TrimSpace(value)), "SLSA_SOURCE_LEVEL_",
 	)
 	level, err := strconv.Atoi(trimmed)
-	if err != nil || level < 0 || level > maxSourceLevel {
-		return 0, fmt.Errorf("invalid source level %q (want 0-%d or SLSA_SOURCE_LEVEL_N)", value, maxSourceLevel)
+	if err != nil || level < minSourceLevel || level > maxSourceLevel {
+		return 0, fmt.Errorf("invalid source level %q (want %d-%d or SLSA_SOURCE_LEVEL_N)", value, minSourceLevel, maxSourceLevel)
 	}
 	return level, nil
 }
 
-const maxSourceLevel = 4
+const (
+	minSourceLevel = 1
+	maxSourceLevel = 4
+)
 
 // addSource registers the source subcommand on parentCmd.
 func addSource(parentCmd *cobra.Command, shared *sharedOptions) {
