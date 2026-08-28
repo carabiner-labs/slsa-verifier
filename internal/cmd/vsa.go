@@ -12,6 +12,7 @@ import (
 	"strings"
 	"text/tabwriter"
 
+	sapi "github.com/carabiner-dev/signer/api/v1"
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 
@@ -20,14 +21,22 @@ import (
 
 // vsaOptions composes the flags specific to the vsa subcommand. The
 // shared flags (--key, --param, --require-signatures) come from
-// sharedOptions registered on the root command. --signer and the
-// other build-only flags are intentionally NOT exposed here; if a
-// future iteration needs them on the VSA path they can be lifted to
-// sharedOptions.
+// sharedOptions registered on the root command; --signer comes from
+// the embedded signingOptions, as on build, and acts as a wildcard
+// signer for every accepted verifier.
 type vsaOptions struct {
 	shared *sharedOptions
+	signingOptions
 
-	Verifier     string
+	// VerifierSpecs holds the raw --verifier values, "id" or "id=spec".
+	VerifierSpecs []string
+
+	// Verifiers is the parsed, merged binding list. Populated by Validate.
+	Verifiers []attestation.VerifierBinding
+
+	// AllowUnbound accepts verifiers that have no authorized signer.
+	AllowUnbound bool
+
 	Levels       []string
 	Resource     string
 	Policy       string
@@ -39,9 +48,15 @@ type vsaOptions struct {
 }
 
 func (o *vsaOptions) AddFlags(cmd *cobra.Command) {
-	cmd.PersistentFlags().StringVar(
-		&o.Verifier, "verifier", "",
-		"expected verifier.id (required; exact match)",
+	o.signingOptions.AddFlags(cmd)
+	cmd.PersistentFlags().StringArrayVar(
+		&o.VerifierSpecs, "verifier", nil,
+		"accepted verifier.id, optionally bound to a signer as id=<signer spec> "+
+			"(repeatable; OR-matched; the same id may be bound to several signers)",
+	)
+	cmd.PersistentFlags().BoolVar(
+		&o.AllowUnbound, "allow-unbound-verifier", false,
+		"accept a --verifier that has no authorized signer, matching its id only",
 	)
 	cmd.PersistentFlags().StringArrayVar(
 		&o.Levels, "level", nil,
@@ -62,11 +77,78 @@ func (o *vsaOptions) AddFlags(cmd *cobra.Command) {
 	)
 }
 
+// parseVerifierBindings turns the raw --verifier values into bindings.
+// A value is "id" or "id=<signer spec>", split on the first "=": ids
+// are URIs and the signer spec grammar puts its own "=" signs after
+// "::", so the first "=" always separates the two. Repeated ids merge
+// their signers.
+func parseVerifierBindings(specs []string) ([]attestation.VerifierBinding, error) {
+	var (
+		bindings []attestation.VerifierBinding
+		index    = map[string]int{}
+		errs     []error
+	)
+	for _, raw := range specs {
+		id, signerSpec, bound := strings.Cut(raw, "=")
+		if id == "" {
+			errs = append(errs, fmt.Errorf("--verifier %q: empty verifier id", raw))
+			continue
+		}
+		pos, seen := index[id]
+		if !seen {
+			pos = len(bindings)
+			index[id] = pos
+			bindings = append(bindings, attestation.VerifierBinding{ID: id})
+		}
+		if !bound {
+			continue
+		}
+		signer, err := sapi.NewIdentityFromSpec(signerSpec)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("--verifier %q: parsing signer spec: %w", raw, err))
+			continue
+		}
+		bindings[pos].Signers = append(bindings[pos].Signers, signer)
+	}
+	return bindings, errors.Join(errs...)
+}
+
 func (o *vsaOptions) Validate() error {
-	errs := []error{o.shared.Validate()}
-	if o.Verifier == "" {
+	errs := []error{o.shared.Validate(), o.signingOptions.Validate()}
+
+	bindings, err := parseVerifierBindings(o.VerifierSpecs)
+	if err != nil {
+		errs = append(errs, err)
+	}
+	o.Verifiers = bindings
+	if len(o.Verifiers) == 0 {
 		errs = append(errs, errors.New("--verifier is required"))
 	}
+
+	// A verifier.id is a claim written into the document; only a signer
+	// bound to it makes the match mean anything. Refuse unbound
+	// verifiers unless the user says so explicitly.
+	if !o.AllowUnbound && len(o.Signers) == 0 {
+		for _, b := range o.Verifiers {
+			if len(b.Signers) == 0 {
+				errs = append(errs, fmt.Errorf(
+					"verifier %q has no authorized signer: bind one with --verifier %s=<signer spec>, "+
+						"add a wildcard --signer, or pass --allow-unbound-verifier", b.ID, b.ID))
+			}
+		}
+	}
+
+	// Binding a signer implies signatures are required: matching an
+	// identity on an unsigned statement is meaningless.
+	if len(o.Signers) > 0 {
+		o.shared.RequireSignatures = true
+	}
+	for _, b := range o.Verifiers {
+		if len(b.Signers) > 0 {
+			o.shared.RequireSignatures = true
+		}
+	}
+
 	if o.AttestationPath == "" {
 		errs = append(errs, errors.New("attestation path is required"))
 	} else if _, err := os.Stat(o.AttestationPath); err != nil {
@@ -80,8 +162,9 @@ func (o *vsaOptions) Validate() error {
 // independently of the library's public option fields.
 func (o *vsaOptions) toLibOptions() *attestation.VSAOptions {
 	return &attestation.VSAOptions{
-		Verifiers:    []attestation.VerifierBinding{{ID: o.Verifier}},
-		AllowUnbound: true, // no signer flags on this command yet
+		Verifiers:    o.Verifiers,
+		Signers:      o.Signers,
+		AllowUnbound: o.AllowUnbound,
 		Levels:       o.Levels,
 		Resource:     o.Resource,
 		Policy:       o.Policy,
@@ -101,15 +184,34 @@ The VSA's envelope signature is verified using --key (and optionally
 version-neutral representation and the following checks run:
 
   * verificationResult must be "PASSED" (always enforced)
-  * verifier.id must equal --verifier (always enforced)
+  * verifier.id must be one of --verifier (always enforced)
+  * the envelope's verified signer must be authorized for that verifier:
+    bound to it with --verifier <id>=<signer spec>, or a wildcard --signer
+    (enforced unless --allow-unbound-verifier is given)
   * verifiedLevels must satisfy one of --level (at-or-above per track; e.g.
     --level SLSA_BUILD_LEVEL_3 is satisfied by SLSA_BUILD_LEVEL_3 or SLSA_BUILD_LEVEL_4)
   * resourceUri must equal --resource (if set)
   * policy.uri must equal --policy (if set)
   * dependencyLevels must contain every --dependency key (if any given)`,
 		Use: "vsa <attestation-path>",
-		Example: fmt.Sprintf(
-			`%s vsa --verifier https://verify.example.com --level SLSA_BUILD_LEVEL_3 vsa.intoto.json`,
+		Example: fmt.Sprintf(`  # Accept VSAs from one verifier, bound to the Sigstore identity that issues them
+  %[1]s vsa --level SLSA_BUILD_LEVEL_3 \
+    --verifier 'https://verify.example.com=sigstore::https://token.actions.githubusercontent.com::https://github.com/org/verifier/.github/workflows/verify.yaml@refs/heads/main' \
+    vsa.sigstore.json
+
+  # Two verifiers, each bound to its own signing key (DSSE envelopes need --key)
+  %[1]s vsa --level SLSA_BUILD_LEVEL_3 \
+    --verifier 'https://a.example.com=key::ecdsa-sha2-nistp256::7c1a0f2b9e3d4c55' --key a.pem \
+    --verifier 'https://b.example.com=key::ecdsa-sha2-nistp256::2f9e8d7c6b5a4433' --key b.pem \
+    vsa.dsse.json
+
+  # A wildcard --signer may sign for any accepted verifier
+  %[1]s vsa --verifier https://a.example.com --verifier https://b.example.com \
+    --signer 'sigstore(identityMatch=regex)::https://accounts.google.com::.*@example\.com' \
+    vsa.sigstore.json
+
+  # Match the verifier id only, trusting nothing about who signed (not recommended)
+  %[1]s vsa --verifier https://verify.example.com --allow-unbound-verifier vsa.intoto.json`,
 			appname,
 		),
 		SilenceUsage:  false,
@@ -201,7 +303,11 @@ func printVSAResult(w io.Writer, result *attestation.VSAResult) {
 	writef(w, "\n")
 
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-	writef(tw, "  Verifier:\t%s\n", v.Verifier.ID)
+	if len(result.Signers) > 0 {
+		writef(tw, "  Verifier:\t%s (signed by %s)\n", v.Verifier.ID, strings.Join(result.Signers, ", "))
+	} else {
+		writef(tw, "  Verifier:\t%s\n", v.Verifier.ID)
+	}
 	writef(tw, "  Result:\t%s\n", v.VerificationResult)
 	if v.ResourceURI != "" {
 		writef(tw, "  Resource:\t%s\n", v.ResourceURI)

@@ -122,6 +122,12 @@ type VSAResult struct {
 	// checks (result, verifier); optional checks appear when the
 	// corresponding VSAOptions field is non-empty.
 	Checks []VSACheck
+
+	// Signers lists the principals of the envelope's verified signers,
+	// when the envelope records them, for display alongside the
+	// verifier it vouched for. Empty for unsigned or unverified
+	// envelopes.
+	Signers []string
 }
 
 // Pass reports whether every check in the result passed.
@@ -210,7 +216,7 @@ func (*Verifier) VerifyVSA(_ context.Context, env Envelope, opts *VSAOptions) (*
 	if len(opts.Dependencies) > 0 {
 		checks = append(checks, checkVSADependencies(v, opts.Dependencies))
 	}
-	return &VSAResult{VSA: v, Checks: checks}, nil
+	return &VSAResult{VSA: v, Checks: checks, Signers: recordedSigners(env.GetVerification())}, nil
 }
 
 func checkVSAResult(v *vsa.VSA) VSACheck {
@@ -276,7 +282,7 @@ func recordedSigners(ver interface{ GetVerified() bool }) []string {
 	sv, ok := ver.(interface {
 		GetSignature() *sapi.SignatureVerification
 	})
-	if !ok || sv.GetSignature() == nil {
+	if !ok || sv.GetSignature() == nil || !sv.GetSignature().GetVerified() {
 		return nil
 	}
 	var out []string
