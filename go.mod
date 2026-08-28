@@ -6,6 +6,7 @@ require (
 	github.com/carabiner-dev/attestation v0.2.1
 	github.com/carabiner-dev/collector v0.3.12
 	github.com/carabiner-dev/command v0.3.1
+	github.com/carabiner-dev/hasher v0.2.4
 	github.com/carabiner-dev/signer v0.6.2-0.20260828055146-750ec16a999f
 	github.com/fatih/color v1.19.0
 	github.com/google/cel-go v0.28.0
@@ -27,7 +28,6 @@ require (
 	github.com/antlr4-go/antlr/v4 v4.13.1 // indirect
 	github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2 // indirect
 	github.com/blang/semver/v4 v4.0.0 // indirect
-	github.com/carabiner-dev/hasher v0.2.4 // indirect
 	github.com/carabiner-dev/jsonl v0.2.1 // indirect
 	github.com/carabiner-dev/openeox v1.0.0 // indirect
 	github.com/carabiner-dev/osv v0.1.2 // indirect
