@@ -4,10 +4,14 @@
 package cmd
 
 import (
+	"bytes"
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -151,4 +155,102 @@ func TestSourceOptionsBrokenParamIsAnError(t *testing.T) {
 	assert.Equal(t, "main", opts.shared.Params["expected_branch"])
 	assert.Equal(t, "https://github.com/example/repo", opts.shared.Params["expected_source_repo"])
 	assert.Equal(t, "2025-01-01T00:00:00Z", opts.shared.Params["enforced_since"])
+}
+
+func TestSourceOptionsSubject(t *testing.T) {
+	t.Parallel()
+	fixture := filepath.Join("..", "..", "pkg", "slsa", "testdata", "plain", "source.intoto.json")
+	sha := strings.Repeat("ab", 20)
+
+	newOpts := func(spec, arg string) *sourceOptions {
+		return &sourceOptions{shared: &sharedOptions{}, Level: "1", AttestationPath: fixture, SubjectSpec: spec, SubjectArg: arg}
+	}
+
+	// Nothing given: unbound.
+	opts := newOpts("", "")
+	require.NoError(t, opts.Validate())
+	assert.Nil(t, opts.Subject)
+	assert.Nil(t, opts.subjects())
+
+	// --subject as algorithm:digest.
+	opts = newOpts("gitCommit:"+sha, "")
+	require.NoError(t, opts.Validate())
+	require.NotNil(t, opts.Subject)
+	assert.Equal(t, map[string]string{"gitCommit": sha}, opts.Subject.Digests)
+	require.Len(t, opts.subjects(), 1)
+
+	// Positional bare sha is taken as a gitCommit.
+	opts = newOpts("", sha)
+	require.NoError(t, opts.Validate())
+	require.NotNil(t, opts.Subject)
+	assert.Equal(t, map[string]string{"gitCommit": sha}, opts.Subject.Digests)
+
+	// Positional algorithm:digest, any algorithm.
+	opts = newOpts("", "sha256:"+strings.Repeat("cd", 32))
+	require.NoError(t, opts.Validate())
+	assert.Equal(t, map[string]string{"sha256": strings.Repeat("cd", 32)}, opts.Subject.Digests)
+
+	// Both is an error, as is anything that is neither form.
+	require.ErrorContains(t, newOpts("gitCommit:"+sha, sha).Validate(), "not both")
+	require.ErrorContains(t, newOpts("", "abc123").Validate(), "40-character commit sha")
+	require.ErrorContains(t, newOpts("gitCommit:zz", "").Validate(), "not hex")
+}
+
+// TestRunSourceSubject binds the source attestation to the commit the
+// user names.
+func TestRunSourceSubject(t *testing.T) {
+	t.Parallel()
+	sha := "3ede92d1d86076be3e238618b5a54c8189668e3f"
+
+	// A copy of the source fixture about a real-length commit.
+	raw, err := os.ReadFile(filepath.Join("..", "..", "pkg", "slsa", "testdata", "plain", "source.intoto.json"))
+	require.NoError(t, err)
+	var doc map[string]any
+	require.NoError(t, json.Unmarshal(raw, &doc))
+	doc["subject"] = []any{map[string]any{"digest": map[string]any{"gitCommit": sha}}}
+	data, err := json.Marshal(doc)
+	require.NoError(t, err)
+	fixture := filepath.Join(t.TempDir(), "source.intoto.json")
+	require.NoError(t, os.WriteFile(fixture, data, 0o600))
+
+	for _, tc := range []struct {
+		name       string
+		spec, arg  string
+		wantPass   bool
+		wantOutput []string
+	}{
+		{name: "unbound", wantPass: true},
+		{name: "commit via --subject", spec: "gitCommit:" + sha, wantPass: true, wantOutput: []string{"Subjects:", "[PASS]", "gitCommit:" + sha[:16]}},
+		{name: "commit via positional bare sha", arg: sha, wantPass: true, wantOutput: []string{"[PASS]"}},
+		{name: "another commit fails", arg: strings.Repeat("00", 20), wantPass: false, wantOutput: []string{"[FAIL]", "does not match", "1 of 1 expected subjects not found"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			opts := &sourceOptions{
+				shared:          &sharedOptions{},
+				Level:           "1",
+				ExpectedRepo:    "https://github.com/example/repo",
+				ExpectedBranch:  "refs/heads/main",
+				AttestationPath: fixture,
+				SubjectSpec:     tc.spec,
+				SubjectArg:      tc.arg,
+			}
+			require.NoError(t, opts.Validate())
+
+			var out bytes.Buffer
+			cmd := &cobra.Command{}
+			cmd.SetOut(&out)
+			err := runSource(cmd, opts)
+			for _, want := range tc.wantOutput {
+				assert.Contains(t, out.String(), want)
+			}
+			if tc.wantPass {
+				require.NoError(t, err)
+				assert.True(t, strings.HasPrefix(out.String(), "PASS"), out.String())
+				return
+			}
+			require.ErrorIs(t, err, ErrVerifyFailed)
+			assert.True(t, strings.HasPrefix(out.String(), "FAIL"), out.String())
+		})
+	}
 }

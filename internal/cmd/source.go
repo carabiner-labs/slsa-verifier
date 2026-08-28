@@ -13,10 +13,12 @@ import (
 
 	"github.com/carabiner-dev/collector/envelope"
 	sapi "github.com/carabiner-dev/signer/api/v1"
+	intoto "github.com/in-toto/attestation/go/v1"
 	"github.com/spf13/cobra"
 
 	"github.com/carabiner-labs/slsa-verifier/pkg/slsa"
 	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/controls"
+	"github.com/carabiner-labs/slsa-verifier/pkg/subject"
 )
 
 // officialSourceIssuer and officialSourceSANs identify the official
@@ -41,6 +43,19 @@ type sourceOptions struct {
 	signingOptions
 	controlsOptions
 	vsaOutputOptions
+
+	// SubjectSpec is the raw --subject value: the commit the attestation
+	// must be about, as algorithm:digest or a bare 40-character commit
+	// sha (taken as gitCommit).
+	SubjectSpec string
+
+	// SubjectArg is the optional second positional argument, the same
+	// commit given without a flag. At most one of the two may be set.
+	SubjectArg string
+
+	// Subject is the parsed expected commit. Populated by Validate; nil
+	// when none was given, which leaves the attestation unbound.
+	Subject *subject.Expected
 
 	// AttestationPath is the positional argument: path to the attestation
 	// file (plain in-toto statement, DSSE envelope, or Sigstore bundle).
@@ -106,6 +121,11 @@ func (o *sourceOptions) AddFlags(cmd *cobra.Command) {
 		&o.ExpectedTag, "expected-tag", "",
 		"expected tag name (tag provenance only), eg v1.2.3",
 	)
+	cmd.PersistentFlags().StringVarP(
+		&o.SubjectSpec, "subject", "s", "",
+		"commit the attestation must be about, as algorithm:digest (eg gitCommit:<sha>) "+
+			"or a bare 40-character commit sha; may also be given as the second argument",
+	)
 	cmd.PersistentFlags().StringVar(
 		&o.Since, "since", "",
 		"require controls active since at or before this date (RFC3339 or YYYY-MM-DD)",
@@ -140,6 +160,21 @@ func (o *sourceOptions) Validate() error {
 		errs = append(errs, err)
 	}
 	o.MinLevel = level
+	o.Subject = nil
+	switch {
+	case o.SubjectSpec != "" && o.SubjectArg != "":
+		errs = append(errs, errors.New("give the expected commit either with --subject or as the second argument, not both"))
+	case o.SubjectSpec != "" || o.SubjectArg != "":
+		value := o.SubjectSpec
+		if value == "" {
+			value = o.SubjectArg
+		}
+		expected, err := parseSourceSubject(value)
+		if err != nil {
+			errs = append(errs, err)
+		}
+		o.Subject = expected
+	}
 	// The expectation flags feed the control params the source catalog
 	// reads. They take precedence over an equivalent --param entry.
 	if o.ExpectedRepo != "" {
@@ -178,6 +213,30 @@ func (o *sourceOptions) Validate() error {
 		o.shared.RequireSignatures = true
 	}
 	return errors.Join(errs...)
+}
+
+// parseSourceSubject parses the expected commit: algorithm:digest as
+// accepted by subject.Parse, or a bare 40-character hex string taken as
+// a gitCommit digest, since that is what source provenance is about.
+func parseSourceSubject(value string) (*subject.Expected, error) {
+	value = strings.TrimSpace(value)
+	if !strings.Contains(value, ":") {
+		if len(value) == 2*intoto.AlgorithmGitCommit.HexLength() {
+			value = string(intoto.AlgorithmGitCommit) + ":" + value
+		} else {
+			return nil, fmt.Errorf("invalid subject %q: want algorithm:digest (eg gitCommit:<sha>) or a 40-character commit sha", value)
+		}
+	}
+	return subject.Parse(value)
+}
+
+// subjects returns the expected subject list for the verifier: the one
+// commit given, or nothing.
+func (o *sourceOptions) subjects() []*subject.Expected {
+	if o.Subject == nil {
+		return nil
+	}
+	return []*subject.Expected{o.Subject}
 }
 
 // parseSinceDate parses the --since flag value — an RFC3339 timestamp
@@ -224,6 +283,12 @@ func addSource(parentCmd *cobra.Command, shared *sharedOptions) {
 		Long: `Verify a SLSA source attestation against the SLSA spec-defined
 source-track controls and any user-supplied controls.
 
+The commit the attestation must be about can be given with --subject or
+as a second argument, as algorithm:digest (eg gitCommit:<sha>) or a bare
+40-character commit sha; the attestation's subject must match it or the
+verification fails. Without it the attestation is verified on its
+content alone.
+
 The attestation may be supplied as a plain in-toto statement, a DSSE
 envelope (signed with one or more keys via --key), or a Sigstore
 bundle. Passing --official requires the attestation to be signed by
@@ -244,16 +309,19 @@ sigstore(identityMatch=regex)::<issuer>::<identity-regexp>:
 
   sigstore::https://accounts.google.com::user@example.com
   sigstore(identityMatch=regex)::https://token.actions.githubusercontent.com::.*@example/.*`,
-		Use: "source <attestation-path>",
+		Use: "source <attestation-path> [commit-digest]",
 		Example: fmt.Sprintf(
 			`%s source --level 3 --official --expected-branch refs/heads/main source-provenance.json`,
 			appname,
 		),
 		SilenceUsage:  false,
 		SilenceErrors: true,
-		Args:          cobra.ExactArgs(1),
+		Args:          cobra.RangeArgs(1, 2),
 		PreRunE: func(_ *cobra.Command, args []string) error {
 			opts.AttestationPath = args[0]
+			if len(args) > 1 {
+				opts.SubjectArg = args[1]
+			}
 			return nil
 		},
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -310,6 +378,7 @@ func runSource(cmd *cobra.Command, opts *sourceOptions) error {
 	result, err := v.Verify(
 		cmd.Context(),
 		stmt,
+		slsa.WithSubjects(opts.subjects()),
 		slsa.WithParams(opts.shared.Params),
 		slsa.WithRequireSignatures(opts.shared.RequireSignatures),
 		slsa.WithExpectedSigners(opts.Signers),
