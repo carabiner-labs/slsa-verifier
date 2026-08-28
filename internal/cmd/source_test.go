@@ -129,3 +129,26 @@ func TestSourceOptionsValidateLevel(t *testing.T) {
 	}
 	assert.Error(t, opts.Validate())
 }
+
+// A malformed --param must be reported, not turn into a nil-map panic
+// when the expectation flags write their own params.
+func TestSourceOptionsBrokenParamIsAnError(t *testing.T) {
+	t.Parallel()
+
+	shared := &sharedOptions{}
+	shared.Raw = []string{"broken"}
+	opts := &sourceOptions{
+		shared:          shared,
+		ExpectedBranch:  "main",
+		ExpectedRepo:    "https://github.com/example/repo",
+		Since:           "2025-01-01",
+		AttestationPath: filepath.Join("..", "..", "pkg", "slsa", "testdata", "plain", "source.intoto.json"),
+	}
+	err := opts.Validate()
+	require.ErrorContains(t, err, `invalid param "broken"`)
+	// The flag-derived params still landed, so the error report is
+	// the only thing wrong with this invocation.
+	assert.Equal(t, "main", opts.shared.Params["expected_branch"])
+	assert.Equal(t, "https://github.com/example/repo", opts.shared.Params["expected_source_repo"])
+	assert.Equal(t, "2025-01-01T00:00:00Z", opts.shared.Params["enforced_since"])
+}

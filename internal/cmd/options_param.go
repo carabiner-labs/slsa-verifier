@@ -57,8 +57,13 @@ func (po *paramOptions) AddFlags(cmd *cobra.Command) {
 	)
 }
 
-// Validate parses every --param entry into the Params map.
+// Validate parses every --param entry into the Params map. Params is
+// always usable afterwards, even when an entry fails to parse: the
+// subcommands' validators collect errors rather than stop at the
+// first one, and they write their own flag-derived params into the
+// map before the errors are reported.
 func (po *paramOptions) Validate() error {
+	po.Params = map[string]any{}
 	parsed, err := parseParams(po.Raw)
 	if err != nil {
 		return err
