@@ -7,3 +7,7 @@
 ---
 controls:
   - id: example-test-builder-id
+  - id: github-source-branch
+  - id: github-source-tag
+  - id: github-source-versioned-tag
+  - id: github-workflow-inputs

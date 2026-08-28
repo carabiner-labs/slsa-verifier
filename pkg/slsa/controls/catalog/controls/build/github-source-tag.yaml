@@ -1,0 +1,52 @@
+# SPDX-FileCopyrightText: Copyright 2026 The SLSA Authors
+# SPDX-License-Identifier: Apache-2.0
+#
+# BuildType controls for provenance produced on GitHub Actions by the
+# slsa-github-generator family (v0.2 and v1 forms) and by GitHub's own
+# artifact attestations. They read the triggering event the builder
+# recorded — invocation.environment.github_* for v0.2 provenance,
+# buildDefinition.internalParameters.GITHUB_* for v1 provenance, and
+# buildDefinition.externalParameters.workflow.ref for GitHub attestations
+# — and compare it with the caller's expectations, given as --param.
+# Each expectation is optional: a control whose parameter is not set is
+# skipped. With none of them set the verifier refuses to run, so a
+# builder the catalog knows is never verified with no expectation stated.
+---
+track: build
+id: github-source-tag
+title: Built From Expected Tag
+description: |
+  Asserts the build was triggered by the expected tag, given as
+  expected_tag (refs/tags/v1.2.3 or v1.2.3), matched exactly. A build
+  triggered from a branch cannot meet a tag expectation.
+checks:
+  - predicateType: https://slsa.dev/provenance/v0.2
+    buildTypes:
+      - https://github.com/slsa-framework/slsa-github-generator/generic@v1
+      - https://github.com/slsa-framework/slsa-github-generator/go@v1
+      - https://github.com/slsa-framework/slsa-github-generator-go@v1
+      - https://github.com/slsa-framework/slsa-github-generator@v1
+      - https://github.com/slsa-framework/slsa-github-generator/container@v1
+    expression: >-
+      has(predicate.invocation.environment.github_ref_type) && predicate.invocation.environment.github_ref_type == "tag"
+      && predicate.invocation.environment.github_ref in ["refs/tags/" + string(params.expected_tag), string(params.expected_tag)]
+    optionalParameters:
+      - expected_tag
+  - predicateType: https://slsa.dev/provenance/v1
+    buildTypes:
+      - https://github.com/slsa-framework/slsa-github-generator/delegator-generic@v0
+      - https://slsa-framework.github.io/github-actions-buildtypes/workflow/v1
+      - https://slsa.dev/container-based-build/v0.1
+      - https://slsa.dev/container-based-build/v0.1?draft
+    expression: >-
+      has(predicate.buildDefinition.internalParameters.GITHUB_REF_TYPE) && predicate.buildDefinition.internalParameters.GITHUB_REF_TYPE == "tag"
+      && predicate.buildDefinition.internalParameters.GITHUB_REF in ["refs/tags/" + string(params.expected_tag), string(params.expected_tag)]
+    optionalParameters:
+      - expected_tag
+  - predicateType: https://slsa.dev/provenance/v1
+    buildTypes:
+      - https://actions.github.io/buildtypes/workflow/v1
+    expression: >-
+      has(predicate.buildDefinition.externalParameters.workflow.ref) && predicate.buildDefinition.externalParameters.workflow.ref in ["refs/tags/" + string(params.expected_tag), string(params.expected_tag)]
+    optionalParameters:
+      - expected_tag
