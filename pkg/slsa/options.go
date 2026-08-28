@@ -65,6 +65,11 @@ type VerificationOptions struct {
 	// RunUserControls toggles execution of user supplied controls.
 	RunUserControls bool
 
+	// SkipBuildTypeChecks skips buildType controls whose parameters were
+	// not set instead of failing the run with ErrBuildTypeParamsUnset.
+	// BuildType controls that take no parameters still run.
+	SkipBuildTypeChecks bool
+
 	// RequireSignatures, when true, fails verification if the statement
 	// does not carry a verified signature (ie loaded as a plain in-toto envelope
 	// or failed to verify).
@@ -147,6 +152,17 @@ type VerificationOption func(*VerificationOptions) error
 func WithBuildTypeControls(enabled bool) VerificationOption {
 	return func(o *VerificationOptions) error {
 		o.RunBuildTypeControls = enabled
+		return nil
+	}
+}
+
+// WithSkipBuildTypeChecks skips buildType controls whose parameters were
+// not set, reporting them as skipped, instead of returning
+// ErrBuildTypeParamsUnset when the caller set none of the parameters
+// the catalog's checks for the statement's buildType accept.
+func WithSkipBuildTypeChecks(skip bool) VerificationOption {
+	return func(o *VerificationOptions) error {
+		o.SkipBuildTypeChecks = skip
 		return nil
 	}
 }

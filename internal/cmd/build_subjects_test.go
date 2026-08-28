@@ -138,3 +138,44 @@ func fileSHA256(t *testing.T, path string) string {
 	sum := sha256.Sum256(data)
 	return hex.EncodeToString(sum[:])
 }
+
+// A buildType the catalog knows, with no expectation stated for it, is
+// an execution error pointing at the flag; the flag skips the checks.
+func TestRunBuildSkipBuildTypeChecks(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	raw, err := os.ReadFile(filepath.Join("..", "..", "pkg", "slsa", "testdata", "plain", "v1-build.intoto.json"))
+	require.NoError(t, err)
+	var doc map[string]any
+	require.NoError(t, json.Unmarshal(raw, &doc))
+	bd, ok := doc["predicate"].(map[string]any)["buildDefinition"].(map[string]any)
+	require.True(t, ok)
+	bd["buildType"] = "https://example.com/test/buildType@v1"
+	data, err := json.Marshal(doc)
+	require.NoError(t, err)
+	attestationPath := filepath.Join(dir, "provenance.intoto.json")
+	require.NoError(t, os.WriteFile(attestationPath, data, 0o600))
+
+	newOpts := func(skip bool) *buildOptions {
+		shared := &sharedOptions{}
+		shared.Raw = []string{"expected_source:git+https://example.com/repo", "trusted_builders:[https://example.com/builder]"}
+		return &buildOptions{shared: shared, AttestationPath: attestationPath, SkipBuildTypeChecks: skip}
+	}
+
+	opts := newOpts(false)
+	require.NoError(t, opts.Validate())
+	var out bytes.Buffer
+	cmd := &cobra.Command{}
+	cmd.SetOut(&out)
+	err = runBuild(cmd, opts)
+	require.Error(t, err)
+	require.NotErrorIs(t, err, ErrVerifyFailed, "an incomplete invocation is not a verification failure")
+	assert.Contains(t, err.Error(), "expected_builder")
+	assert.Contains(t, err.Error(), "--skip-buildtype-checks")
+
+	opts = newOpts(true)
+	require.NoError(t, opts.Validate())
+	out.Reset()
+	require.NoError(t, runBuild(cmd, opts))
+	assert.True(t, strings.HasPrefix(out.String(), "PASS"))
+}

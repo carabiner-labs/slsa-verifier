@@ -646,3 +646,42 @@ func TestVerifyV1FixtureSubjects(t *testing.T) {
 	assert.Equal(t, "1 of 2 expected subjects not found in the attestation", res.Message)
 	assert.Equal(t, baseline.SLSALevel, res.SLSALevel, "the controls still ran and the level is still computed")
 }
+
+// TestVerifyBuildTypeParamsMustBeSet: a provenance whose buildType the
+// catalog has parameterized checks for cannot be verified without stating
+// at least one of the parameters, unless the checks are skipped.
+func TestVerifyBuildTypeParamsMustBeSet(t *testing.T) {
+	t.Parallel()
+
+	// The catalog's example buildType control keys on this buildType and
+	// takes expected_builder.
+	stmt := mutatedFixture(t, "v1-build.intoto.json", func(p map[string]any) {
+		bd, ok := p["buildDefinition"].(map[string]any)
+		require.True(t, ok)
+		bd["buildType"] = "https://example.com/test/buildType@v1"
+	})
+	v, err := slsa.New()
+	require.NoError(t, err)
+	base := []slsa.VerificationOption{
+		slsa.WithParam("expected_source", "git+https://example.com/repo"),
+		slsa.WithParam("trusted_builders", []string{"https://example.com/builder"}),
+	}
+
+	_, err = v.Verify(context.Background(), stmt, base...)
+	require.ErrorIs(t, err, slsa.ErrBuildTypeParamsUnset)
+	assert.Contains(t, err.Error(), "https://example.com/test/buildType@v1")
+	assert.Contains(t, err.Error(), "expected_builder")
+
+	res, err := v.Verify(context.Background(), stmt, append(base, slsa.WithParam("expected_builder", "https://example.com/builder"))...)
+	require.NoError(t, err)
+	assert.Equal(t, slsa.StatusPass, res.Status)
+	require.Len(t, res.BuildTypeResults, 1)
+	assert.Equal(t, slsa.StatusPass, res.BuildTypeResults[0].Status)
+
+	res, err = v.Verify(context.Background(), stmt, append(base, slsa.WithSkipBuildTypeChecks(true))...)
+	require.NoError(t, err)
+	assert.Equal(t, slsa.StatusPass, res.Status)
+	require.Len(t, res.BuildTypeResults, 1)
+	assert.Equal(t, slsa.StatusSkipped, res.BuildTypeResults[0].Status)
+	assert.Contains(t, res.BuildTypeResults[0].Message, "expected_builder")
+}

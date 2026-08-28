@@ -106,10 +106,17 @@ func (v *Verifier) Verify(ctx context.Context, statement attestation.Statement, 
 	var buildTypeResults []*ControlResult
 	if vopts.RunBuildTypeControls {
 		btCtrls := v.impl.SelectBuildTypeControls(&vopts, v.Options.Catalog, statement)
-		buildTypeResults, err = v.impl.RunControls(ctx, &vopts, btCtrls, statement)
+		// A buildType the catalog knows, with no expectation stated for
+		// it, is an incomplete invocation rather than a pass.
+		run, skipped, err := partitionBuildTypeControls(&vopts, btCtrls, statement)
+		if err != nil {
+			return nil, err
+		}
+		buildTypeResults, err = v.impl.RunControls(ctx, &vopts, run, statement)
 		if err != nil {
 			return nil, fmt.Errorf("running buildType controls: %w", err)
 		}
+		buildTypeResults = append(buildTypeResults, skipped...)
 	}
 
 	// Layer 6: select and run user controls (optional).

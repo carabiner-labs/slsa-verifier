@@ -34,6 +34,10 @@ type buildOptions struct {
 	// files the attestation must be about (see subjectOptions).
 	AttestationPath string
 
+	// SkipBuildTypeChecks skips buildType checks whose parameters were
+	// not set instead of refusing to run (--skip-buildtype-checks).
+	SkipBuildTypeChecks bool
+
 	// Spec is the SLSA spec version whose criteria the attestation is
 	// verified against, empty means the latest the catalog defines.
 	Spec string
@@ -49,6 +53,11 @@ func (o *buildOptions) AddFlags(cmd *cobra.Command) {
 	o.controlsOptions.AddFlags(cmd)
 	o.vsaOutputOptions.AddFlags(cmd)
 	o.subjectOptions.AddFlags(cmd)
+	cmd.PersistentFlags().BoolVar(
+		&o.SkipBuildTypeChecks, "skip-buildtype-checks", false,
+		"skip the buildType-specific checks whose parameters were not set, instead of "+
+			"refusing to run until at least one of them is",
+	)
 	cmd.PersistentFlags().StringVar(
 		&o.Spec, "spec", "",
 		"SLSA spec version to verify against (eg 1.2) defaults to latest",
@@ -181,6 +190,7 @@ func runBuild(cmd *cobra.Command, opts *buildOptions) error {
 		stmt,
 		slsa.WithSubjects(expected),
 		slsa.WithGitDigestAliases(opts.shared.GitDigestAliases),
+		slsa.WithSkipBuildTypeChecks(opts.SkipBuildTypeChecks),
 		slsa.WithParams(opts.shared.Params),
 		slsa.WithRequireSignatures(opts.shared.RequireSignatures),
 		slsa.WithExpectedSigners(opts.Signers),
@@ -198,6 +208,11 @@ func runBuild(cmd *cobra.Command, opts *buildOptions) error {
 	if errors.Is(err, slsa.ErrIdentityMismatch) {
 		writef(cmd.OutOrStdout(), "FAIL\n  Identity: %s\n", err)
 		return ErrVerifyFailed
+	}
+	// An incomplete invocation, not a verification outcome: the message
+	// already says what to set, so surface it as is.
+	if errors.Is(err, slsa.ErrBuildTypeParamsUnset) {
+		return err
 	}
 	if err != nil {
 		return fmt.Errorf("running verification: %w", err)
