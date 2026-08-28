@@ -24,6 +24,8 @@ hDjayw2lL6wkyR9k1vWICQYbe4FqOZeulBbfWBU7/BKdtlwKRStEVEffvg==
 // https://verify.example.com at SLSA_BUILD_LEVEL_4, wrapped in a DSSE
 // envelope signed with a throwaway key nobody has: a well-formed
 // signature that no supplied key will ever verify.
+// testdata/garbage-sig-vsa.dsse.json is the same VSA with signature
+// bytes that are not a signature at all.
 func TestRunVSASignatureOutcomes(t *testing.T) {
 	t.Parallel()
 
@@ -32,6 +34,7 @@ func TestRunVSASignatureOutcomes(t *testing.T) {
 
 	for _, tc := range []struct {
 		name       string
+		fixture    string // defaults to forged-vsa.dsse.json
 		required   bool
 		keyPaths   []string
 		wantErr    error  // sentinel the error must wrap; nil means success
@@ -52,6 +55,13 @@ func TestRunVSASignatureOutcomes(t *testing.T) {
 			required: true, keyPaths: []string{keyPath},
 			wantErr: ErrVerifyFailed, wantOutput: "did not verify",
 		},
+		{
+			// Bytes that are not a signature are a bad signature, not a
+			// tooling problem: the key was supplied and the check ran.
+			name:    "required, key supplied, garbage signature bytes: FAIL, not an error",
+			fixture: "garbage-sig-vsa.dsse.json", required: true, keyPaths: []string{keyPath},
+			wantErr: ErrVerifyFailed, wantOutput: "did not verify",
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -63,6 +73,9 @@ func TestRunVSASignatureOutcomes(t *testing.T) {
 				Verifier:        "https://verify.example.com",
 				Levels:          []string{"SLSA_BUILD_LEVEL_3"},
 				AttestationPath: filepath.Join("testdata", "forged-vsa.dsse.json"),
+			}
+			if tc.fixture != "" {
+				opts.AttestationPath = filepath.Join("testdata", tc.fixture)
 			}
 			var out bytes.Buffer
 			cmd := &cobra.Command{}
