@@ -1,2 +1,58 @@
 # slsa-verifier
-SLSA Verifier
+
+A command-line verifier for [SLSA](https://slsa.dev) attestations: build
+provenance (`build`), source provenance (`source`) and Verification Summary
+Attestations (`vsa`). It parses plain in-toto statements, DSSE envelopes and
+Sigstore bundles, verifies their signatures when asked to, evaluates the
+SLSA controls for the requested track and level, and can emit a VSA from the
+result.
+
+```
+slsa-verifier build  --require-signatures --signer <spec> --level 3 provenance.sigstore.json
+slsa-verifier source --official --level 3 --expected-branch refs/heads/main source-provenance.sigstore.json
+slsa-verifier vsa    --verifier 'https://verify.example.com=<signer spec>' --level SLSA_BUILD_LEVEL_3 vsa.sigstore.json
+```
+
+Every subcommand prints `PASS` or `FAIL` with the per-control roster and
+exits with `0` on pass, `1` on a verification failure and `2` when the
+verification could not run (bad flags, unreadable input, missing key
+material). Run any subcommand with `--help` for its flags and examples.
+
+## Trust model
+
+Read this before relying on the tool's output. The defaults are
+deliberately permissive so that attestations can be inspected without any
+key material; making a result *trustworthy* requires opting in.
+
+- **Signatures are not required by default.** Without
+  `--require-signatures`, an unsigned statement, or a signed one whose
+  signature could not be checked, is evaluated on its content alone. With
+  it, the statement must carry a signature that verified: a missing one
+  fails the run, and a signed statement with nothing to verify it against
+  (no `--key` for a DSSE envelope) is an error rather than a pass.
+- **Who signed is not checked unless you say who you expect.** A verified
+  signature proves the content is intact, not that the right party produced
+  it. Use `--signer <spec>` (`build`, `vsa`), `--official` (`source`, the
+  SLSA source-actions workflow identity) or a per-verifier binding
+  `--verifier <id>=<spec>` (`vsa`) to require a specific identity. Any of
+  these implies `--require-signatures`.
+- **Claims inside an attestation are claims.** `builder.id`, `verifier.id`
+  and the controls a source provenance lists are written by whoever
+  produced the document. They only mean something once the signer is bound
+  to them: for `vsa` the tool refuses an unbound verifier unless you pass
+  `--allow-unbound-verifier`; for `build` and `source`, pass a signer.
+- **The VSA it emits summarizes what it checked.** A VSA emitted with
+  `--vsa` from an unsigned or unbound input is a summary of an unverified
+  document. Only issue VSAs from runs that required and bound signatures.
+
+See [SECURITY.md](SECURITY.md) for how to report a problem.
+
+## Development
+
+```
+go build ./...
+go test -race ./...
+golangci-lint run ./...
+```
+
+Test fixtures live under `pkg/slsa/testdata`; see its README.
