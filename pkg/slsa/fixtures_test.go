@@ -22,6 +22,7 @@ import (
 
 	"github.com/carabiner-labs/slsa-verifier/pkg/slsa"
 	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/eval"
+	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/vsa"
 )
 
 // loadFixture parses a fixture through the public collector envelope
@@ -533,4 +534,73 @@ func TestVerifyTagFixtureUnknownLevelDoesNotCount(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, slsa.StatusFail, res.Status)
 	assert.Equal(t, 0, res.SLSALevel)
+}
+
+// loadBundleFixture parses a Sigstore bundle fixture into its envelope.
+func loadBundleFixture(t *testing.T, name string) attestation.Envelope {
+	t.Helper()
+	envs, err := envelope.Parsers.ParseFiles([]string{filepath.Join("testdata", "bundle", name)})
+	require.NoError(t, err, "parsing fixture %s", name)
+	require.Len(t, envs, 1)
+	return envs[0]
+}
+
+// TestBundleFixturesParse walks the Sigstore bundle fixtures: each parses
+// to the expected predicate type, carries a signature, and records no
+// verification until Verify runs. Signature verification itself needs
+// the Sigstore trust root and is not exercised here.
+func TestBundleFixturesParse(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name          string
+		predicateType string
+	}{
+		{"source-provenance.sigstore.json", "https://github.com/slsa-framework/slsa-source-poc/source-provenance/v1-draft"},
+		{"source-vsa.sigstore.json", "https://slsa.dev/verification_summary/v1"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			env := loadBundleFixture(t, tc.name)
+			stmt := env.GetStatement()
+			require.NotNil(t, stmt)
+			assert.Equal(t, attestation.PredicateType(tc.predicateType), stmt.GetPredicateType())
+			assert.Len(t, env.GetSignatures(), 1, "the bundle is signed")
+			assert.Nil(t, env.GetVerification(), "nothing is verified before Verify runs")
+		})
+	}
+}
+
+// TestBundleFixtureSourceProvenanceVerifies runs the source controls over
+// the real-world provenance bundle without requiring signatures.
+func TestBundleFixtureSourceProvenanceVerifies(t *testing.T) {
+	t.Parallel()
+
+	stmt := loadBundleFixture(t, "source-provenance.sigstore.json").GetStatement()
+	v, err := slsa.New()
+	require.NoError(t, err)
+	res, err := v.Verify(
+		context.Background(),
+		stmt,
+		slsa.WithMinLevel(1),
+		slsa.WithParam("expected_source_repo", "https://github.com/puerco/lab"),
+		slsa.WithParam("expected_branch", "refs/heads/master"),
+	)
+	require.NoError(t, err)
+	assert.Equal(t, slsa.StatusPass, res.Status)
+	assert.GreaterOrEqual(t, res.SLSALevel, 1)
+}
+
+// TestBundleFixtureVSAExtracts checks the VSA bundle normalizes to the
+// values the workflow issued.
+func TestBundleFixtureVSAExtracts(t *testing.T) {
+	t.Parallel()
+
+	stmt := loadBundleFixture(t, "source-vsa.sigstore.json").GetStatement()
+	got, err := vsa.FromStatement(stmt)
+	require.NoError(t, err)
+	assert.Equal(t, "https://github.com/slsa-framework/source-actions", got.Verifier.ID)
+	assert.True(t, got.Passed())
+	assert.Equal(t, []string{"SLSA_SOURCE_LEVEL_1"}, got.VerifiedLevels)
+	assert.Equal(t, "git+https://github.com/puerco/lab", got.ResourceURI)
 }
