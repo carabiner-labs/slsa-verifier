@@ -86,6 +86,7 @@ func TestVerifyCallsLayersInOrder(t *testing.T) {
 
 	assert.Equal(t, 1, fake.VerifySignaturesCallCount())
 	assert.Equal(t, 1, fake.CheckIdentitiesCallCount())
+	assert.Equal(t, 1, fake.CheckSubjectsCallCount())
 	assert.Equal(t, 1, fake.ResolveCategoryCallCount())
 	// SelectCoreControls + SelectBuildTypeControls + SelectUserControls each once
 	assert.Equal(t, 1, fake.SelectCoreControlsCallCount())

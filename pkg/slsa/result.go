@@ -3,6 +3,8 @@
 
 package slsa
 
+import "github.com/carabiner-labs/slsa-verifier/pkg/subject"
+
 // Status enumerates the high-level outcome of a verification or a single control.
 type Status string
 
@@ -64,6 +66,12 @@ type Result struct {
 
 	// UserResults holds per-control results for user-supplied controls.
 	UserResults []*ControlResult
+
+	// Subjects holds the outcome of binding the statement to the
+	// artifacts the caller holds, one entry per expected subject in the
+	// order given (see WithSubjects). Empty when no subjects were
+	// expected. Any unmatched entry makes Status a FAIL.
+	Subjects []subject.Match
 }
 
 // Pass reports whether the result is a PASS.

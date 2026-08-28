@@ -11,10 +11,12 @@ import (
 	cdattestation "github.com/carabiner-dev/attestation"
 	sapi "github.com/carabiner-dev/signer/api/v1"
 	vsav1 "github.com/in-toto/attestation/go/predicates/vsa/v1"
+	intoto "github.com/in-toto/attestation/go/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/vsa"
+	"github.com/carabiner-labs/slsa-verifier/pkg/subject"
 )
 
 // fakePredicate is a minimal attestation.Predicate for unit tests —
@@ -39,11 +41,12 @@ func (p *fakePredicate) SetVerification(_ cdattestation.Verification) {}
 
 // fakeStmt is a minimal attestation.Statement for unit tests.
 type fakeStmt struct {
-	pType cdattestation.PredicateType
-	pred  cdattestation.Predicate
+	pType    cdattestation.PredicateType
+	pred     cdattestation.Predicate
+	subjects []cdattestation.Subject
 }
 
-func (s *fakeStmt) GetSubjects() []cdattestation.Subject          { return nil }
+func (s *fakeStmt) GetSubjects() []cdattestation.Subject          { return s.subjects }
 func (s *fakeStmt) GetPredicate() cdattestation.Predicate         { return s.pred }
 func (s *fakeStmt) GetPredicateType() cdattestation.PredicateType { return s.pType }
 func (s *fakeStmt) GetType() string                               { return "" }
@@ -422,4 +425,53 @@ func TestVerifyVSAVerifierOrMatched(t *testing.T) {
 	require.NotNil(t, verifier)
 	assert.Contains(t, verifier.Name, "https://a.example.com")
 	assert.Contains(t, verifier.Name, "https://verify.example.com")
+}
+
+// --- subject binding ----------------------------------------------------
+
+func TestVerifyVSASubjects(t *testing.T) {
+	t.Parallel()
+
+	env := vsaEnv(nil)
+	stmt, ok := env.stmt.(*fakeStmt)
+	require.True(t, ok)
+	stmt.subjects = []cdattestation.Subject{
+		&intoto.ResourceDescriptor{Name: "pkg:oci/foo", Digest: map[string]string{"sha256": "aaaa"}},
+	}
+	opts := func(expected ...*subject.Expected) *VSAOptions {
+		return &VSAOptions{
+			Verifiers:    []VerifierBinding{{ID: "https://verify.example.com"}},
+			AllowUnbound: true,
+			Subjects:     expected,
+		}
+	}
+	held := &subject.Expected{Name: "foo.tgz", Digests: map[string]string{"sha256": "aaaa"}}
+	other := &subject.Expected{Name: "bar.tgz", Digests: map[string]string{"sha256": "ffff"}}
+
+	// Nothing expected: nothing reported, verdict unchanged.
+	r, err := New().VerifyVSA(context.Background(), env, opts())
+	require.NoError(t, err)
+	assert.True(t, r.Pass())
+	assert.Empty(t, r.Subjects)
+
+	// The held artifact is the VSA's subject.
+	r, err = New().VerifyVSA(context.Background(), env, opts(held))
+	require.NoError(t, err)
+	assert.True(t, r.Pass())
+	require.Len(t, r.Subjects, 1)
+	assert.True(t, r.Subjects[0].Matched)
+	assert.Equal(t, "pkg:oci/foo", r.Subjects[0].Subject.GetName())
+
+	// One artifact the VSA is not about fails the result, while every
+	// check row still passes and both outcomes are reported.
+	r, err = New().VerifyVSA(context.Background(), env, opts(held, other))
+	require.NoError(t, err)
+	assert.False(t, r.Pass())
+	for _, c := range r.Checks {
+		assert.True(t, c.Pass, c.Name)
+	}
+	require.Len(t, r.Subjects, 2)
+	assert.True(t, r.Subjects[0].Matched)
+	assert.False(t, r.Subjects[1].Matched)
+	assert.NotEmpty(t, r.Subjects[1].Message)
 }

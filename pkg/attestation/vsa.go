@@ -12,6 +12,7 @@ import (
 	sapi "github.com/carabiner-dev/signer/api/v1"
 
 	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/vsa"
+	"github.com/carabiner-labs/slsa-verifier/pkg/subject"
 )
 
 // ErrVerifierUnbound is returned by VerifyVSA when an accepted verifier
@@ -49,6 +50,11 @@ type VerifierBinding struct {
 //   - AllowUnbound permits verifiers with no authorized signer at all,
 //     in which case only the ID is matched. Off by default, VerifyVSA
 //     returns ErrVerifierUnbound instead.
+//   - Subjects are the artifacts the caller holds and expects the VSA
+//     to be about. Every one must match a VSA subject (sharing at
+//     least one digest algorithm and agreeing on every shared one) or
+//     the result fails; each outcome is reported in VSAResult.Subjects.
+//     Empty binds the VSA to nothing.
 //   - Levels is OR-matched against VSA.VerifiedLevels — at least one
 //     listed level must be satisfied. For canonical SLSA level
 //     strings (e.g. SLSA_BUILD_LEVEL_3) the match is "at-or-above":
@@ -64,6 +70,7 @@ type VSAOptions struct {
 	Verifiers    []VerifierBinding
 	Signers      []*sapi.Identity
 	AllowUnbound bool
+	Subjects     []*subject.Expected
 	Levels       []string
 	Resource     string
 	Policy       string
@@ -128,16 +135,22 @@ type VSAResult struct {
 	// verifier it vouched for. Empty for unsigned or unverified
 	// envelopes.
 	Signers []string
+
+	// Subjects holds the outcome of binding the VSA to the artifacts
+	// the caller holds, one entry per VSAOptions.Subjects entry in
+	// order. Empty when none were expected.
+	Subjects []subject.Match
 }
 
-// Pass reports whether every check in the result passed.
+// Pass reports whether every check passed and every expected subject
+// was found.
 func (r *VSAResult) Pass() bool {
 	for _, c := range r.Checks {
 		if !c.Pass {
 			return false
 		}
 	}
-	return true
+	return subject.AllMatched(r.Subjects)
 }
 
 // VSACheck is the result of one hardcoded VSA check.
@@ -216,7 +229,11 @@ func (*Verifier) VerifyVSA(_ context.Context, env Envelope, opts *VSAOptions) (*
 	if len(opts.Dependencies) > 0 {
 		checks = append(checks, checkVSADependencies(v, opts.Dependencies))
 	}
-	return &VSAResult{VSA: v, Checks: checks, Signers: recordedSigners(env.GetVerification())}, nil
+	result := &VSAResult{VSA: v, Checks: checks, Signers: recordedSigners(env.GetVerification())}
+	if len(opts.Subjects) > 0 {
+		result.Subjects = subject.MatchAll(opts.Subjects, stmt.GetSubjects())
+	}
+	return result, nil
 }
 
 func checkVSAResult(v *vsa.VSA) VSACheck {

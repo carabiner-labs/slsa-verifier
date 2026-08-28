@@ -4,9 +4,12 @@
 package slsa
 
 import (
+	"slices"
+
 	sapi "github.com/carabiner-dev/signer/api/v1"
 
 	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/controls"
+	"github.com/carabiner-labs/slsa-verifier/pkg/subject"
 )
 
 // Options holds construction-time settings for a Verifier.
@@ -76,6 +79,13 @@ type VerificationOptions struct {
 	// least one verified signer matches one of these (OR'ed). An empty list
 	// is the default and skips identity matching.
 	ExpectedSigners []*sapi.Identity
+
+	// Subjects are the artifacts the caller holds and expects the
+	// statement to be about. When non-empty, every one of them must
+	// match a subject of the statement or the verification fails. Empty
+	// (the default) binds the statement to nothing: it is verified on
+	// its content alone.
+	Subjects []*subject.Expected
 
 	// ForceTrack overrides the catalog's predicate-type to track
 	// resolution. Empty means "auto" (the catalog must associate the
@@ -168,6 +178,17 @@ func WithExpectedSigner(id *sapi.Identity) VerificationOption {
 func WithExpectedSigners(ids []*sapi.Identity) VerificationOption {
 	return func(o *VerificationOptions) error {
 		o.ExpectedSigners = ids
+		return nil
+	}
+}
+
+// WithSubjects sets the artifacts the statement must be about: each one
+// must match a statement subject (sharing at least one digest algorithm
+// and agreeing on every shared one) or the verification fails. The
+// list replaces any previous one; nil clears it.
+func WithSubjects(expected []*subject.Expected) VerificationOption {
+	return func(o *VerificationOptions) error {
+		o.Subjects = slices.Clone(expected)
 		return nil
 	}
 }

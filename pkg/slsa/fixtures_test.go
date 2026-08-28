@@ -23,6 +23,7 @@ import (
 	"github.com/carabiner-labs/slsa-verifier/pkg/slsa"
 	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/eval"
 	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/vsa"
+	"github.com/carabiner-labs/slsa-verifier/pkg/subject"
 )
 
 // loadFixture parses a fixture through the public collector envelope
@@ -603,4 +604,45 @@ func TestBundleFixtureVSAExtracts(t *testing.T) {
 	assert.True(t, got.Passed())
 	assert.Equal(t, []string{"SLSA_SOURCE_LEVEL_1"}, got.VerifiedLevels)
 	assert.Equal(t, "git+https://github.com/puerco/lab", got.ResourceURI)
+}
+
+// TestVerifyV1FixtureSubjects binds the build fixture to expected
+// artifacts: the fixture's subject is out/binary with sha256 deadbeef.
+func TestVerifyV1FixtureSubjects(t *testing.T) {
+	t.Parallel()
+
+	stmt := loadFixture(t, "v1-build.intoto.json")
+	v, err := slsa.New()
+	require.NoError(t, err)
+	base := []slsa.VerificationOption{
+		slsa.WithParam("expected_source", "git+https://example.com/repo"),
+		slsa.WithParam("trusted_builders", []string{"https://example.com/builder"}),
+	}
+	baseline, err := v.Verify(context.Background(), stmt, base...)
+	require.NoError(t, err)
+	require.Equal(t, slsa.StatusPass, baseline.Status, "the fixture must pass on its own for the subject cases to mean anything")
+	assert.Empty(t, baseline.Subjects, "no subjects expected, none reported")
+
+	held := &subject.Expected{Name: "dist/binary", Digests: map[string]string{"sha256": "deadbeef", "sha512": "unrelated"}}
+	other := &subject.Expected{Name: "dist/other", Digests: map[string]string{"sha256": "cafebabe"}}
+
+	// The held artifact is the fixture's subject.
+	res, err := v.Verify(context.Background(), stmt, append(base, slsa.WithSubjects([]*subject.Expected{held}))...)
+	require.NoError(t, err)
+	assert.Equal(t, slsa.StatusPass, res.Status)
+	require.Len(t, res.Subjects, 1)
+	assert.True(t, res.Subjects[0].Matched)
+	assert.Equal(t, "out/binary", res.Subjects[0].Subject.GetName())
+	assert.Empty(t, res.Message)
+
+	// One artifact the attestation is not about fails the run, and the
+	// per-subject outcomes are all still reported.
+	res, err = v.Verify(context.Background(), stmt, append(base, slsa.WithSubjects([]*subject.Expected{held, other}))...)
+	require.NoError(t, err)
+	assert.Equal(t, slsa.StatusFail, res.Status)
+	require.Len(t, res.Subjects, 2)
+	assert.True(t, res.Subjects[0].Matched)
+	assert.False(t, res.Subjects[1].Matched)
+	assert.Equal(t, "1 of 2 expected subjects not found in the attestation", res.Message)
+	assert.Equal(t, baseline.SLSALevel, res.SLSALevel, "the controls still ran and the level is still computed")
 }

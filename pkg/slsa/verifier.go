@@ -15,6 +15,7 @@ import (
 	// the collector's global registry so envelope/statement parsing only
 	// recognises SLSA build and source predicate types.
 	_ "github.com/carabiner-labs/slsa-verifier/pkg/slsa/predicate"
+	"github.com/carabiner-labs/slsa-verifier/pkg/subject"
 )
 
 // Verifier is the SLSA attestation verifier. It orchestrates the layered
@@ -80,6 +81,14 @@ func (v *Verifier) Verify(ctx context.Context, statement attestation.Statement, 
 		return nil, fmt.Errorf("checking identities: %w", err)
 	}
 
+	// Layer 2b: bind the statement to the artifacts the caller holds.
+	// A mismatch is a verdict, not an error: the controls still run so
+	// the caller sees the full picture, and the result fails below.
+	subjects, err := v.impl.CheckSubjects(ctx, &vopts, statement)
+	if err != nil {
+		return nil, fmt.Errorf("checking subjects: %w", err)
+	}
+
 	// Layer 3: predicate routing (build vs source).
 	category, err := v.impl.ResolveCategory(&vopts, v.Options.Catalog, statement)
 	if err != nil {
@@ -122,6 +131,30 @@ func (v *Verifier) Verify(ctx context.Context, statement attestation.Statement, 
 		// Record the spec version the core category resolved to so
 		// callers (and emitted VSAs) can state which criteria applied.
 		result.SpecVersion = controls.SpecVersionOf(category)
+		result.Subjects = subjects
+		if !subject.AllMatched(subjects) {
+			result.Status = StatusFail
+			result.Message = joinMessages(result.Message, subjectsMessage(subjects))
+		}
 	}
 	return result, nil
+}
+
+// subjectsMessage summarizes which expected subjects the statement is
+// not about.
+func subjectsMessage(matches []subject.Match) string {
+	unmatched := 0
+	for _, m := range matches {
+		if !m.Matched {
+			unmatched++
+		}
+	}
+	return fmt.Sprintf("%d of %d expected subjects not found in the attestation", unmatched, len(matches))
+}
+
+func joinMessages(a, b string) string {
+	if a == "" {
+		return b
+	}
+	return a + "; " + b
 }

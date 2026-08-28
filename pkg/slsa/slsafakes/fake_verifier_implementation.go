@@ -8,6 +8,7 @@ import (
 	"github.com/carabiner-dev/attestation"
 	"github.com/carabiner-labs/slsa-verifier/pkg/slsa"
 	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/controls"
+	"github.com/carabiner-labs/slsa-verifier/pkg/subject"
 )
 
 type FakeVerifierImplementation struct {
@@ -23,6 +24,21 @@ type FakeVerifierImplementation struct {
 	}
 	checkIdentitiesReturnsOnCall map[int]struct {
 		result1 error
+	}
+	CheckSubjectsStub        func(context.Context, *slsa.VerificationOptions, attestation.Statement) ([]subject.Match, error)
+	checkSubjectsMutex       sync.RWMutex
+	checkSubjectsArgsForCall []struct {
+		arg1 context.Context
+		arg2 *slsa.VerificationOptions
+		arg3 attestation.Statement
+	}
+	checkSubjectsReturns struct {
+		result1 []subject.Match
+		result2 error
+	}
+	checkSubjectsReturnsOnCall map[int]struct {
+		result1 []subject.Match
+		result2 error
 	}
 	ComputeResultStub        func(*slsa.VerificationOptions, []*slsa.ControlResult, []*slsa.ControlResult, []*slsa.ControlResult) (*slsa.Result, error)
 	computeResultMutex       sync.RWMutex
@@ -186,6 +202,72 @@ func (fake *FakeVerifierImplementation) CheckIdentitiesReturnsOnCall(i int, resu
 	fake.checkIdentitiesReturnsOnCall[i] = struct {
 		result1 error
 	}{result1}
+}
+
+func (fake *FakeVerifierImplementation) CheckSubjects(arg1 context.Context, arg2 *slsa.VerificationOptions, arg3 attestation.Statement) ([]subject.Match, error) {
+	fake.checkSubjectsMutex.Lock()
+	ret, specificReturn := fake.checkSubjectsReturnsOnCall[len(fake.checkSubjectsArgsForCall)]
+	fake.checkSubjectsArgsForCall = append(fake.checkSubjectsArgsForCall, struct {
+		arg1 context.Context
+		arg2 *slsa.VerificationOptions
+		arg3 attestation.Statement
+	}{arg1, arg2, arg3})
+	stub := fake.CheckSubjectsStub
+	fakeReturns := fake.checkSubjectsReturns
+	fake.recordInvocation("CheckSubjects", []interface{}{arg1, arg2, arg3})
+	fake.checkSubjectsMutex.Unlock()
+	if stub != nil {
+		return stub(arg1, arg2, arg3)
+	}
+	if specificReturn {
+		return ret.result1, ret.result2
+	}
+	return fakeReturns.result1, fakeReturns.result2
+}
+
+func (fake *FakeVerifierImplementation) CheckSubjectsCallCount() int {
+	fake.checkSubjectsMutex.RLock()
+	defer fake.checkSubjectsMutex.RUnlock()
+	return len(fake.checkSubjectsArgsForCall)
+}
+
+func (fake *FakeVerifierImplementation) CheckSubjectsCalls(stub func(context.Context, *slsa.VerificationOptions, attestation.Statement) ([]subject.Match, error)) {
+	fake.checkSubjectsMutex.Lock()
+	defer fake.checkSubjectsMutex.Unlock()
+	fake.CheckSubjectsStub = stub
+}
+
+func (fake *FakeVerifierImplementation) CheckSubjectsArgsForCall(i int) (context.Context, *slsa.VerificationOptions, attestation.Statement) {
+	fake.checkSubjectsMutex.RLock()
+	defer fake.checkSubjectsMutex.RUnlock()
+	argsForCall := fake.checkSubjectsArgsForCall[i]
+	return argsForCall.arg1, argsForCall.arg2, argsForCall.arg3
+}
+
+func (fake *FakeVerifierImplementation) CheckSubjectsReturns(result1 []subject.Match, result2 error) {
+	fake.checkSubjectsMutex.Lock()
+	defer fake.checkSubjectsMutex.Unlock()
+	fake.CheckSubjectsStub = nil
+	fake.checkSubjectsReturns = struct {
+		result1 []subject.Match
+		result2 error
+	}{result1, result2}
+}
+
+func (fake *FakeVerifierImplementation) CheckSubjectsReturnsOnCall(i int, result1 []subject.Match, result2 error) {
+	fake.checkSubjectsMutex.Lock()
+	defer fake.checkSubjectsMutex.Unlock()
+	fake.CheckSubjectsStub = nil
+	if fake.checkSubjectsReturnsOnCall == nil {
+		fake.checkSubjectsReturnsOnCall = make(map[int]struct {
+			result1 []subject.Match
+			result2 error
+		})
+	}
+	fake.checkSubjectsReturnsOnCall[i] = struct {
+		result1 []subject.Match
+		result2 error
+	}{result1, result2}
 }
 
 func (fake *FakeVerifierImplementation) ComputeResult(arg1 *slsa.VerificationOptions, arg2 []*slsa.ControlResult, arg3 []*slsa.ControlResult, arg4 []*slsa.ControlResult) (*slsa.Result, error) {

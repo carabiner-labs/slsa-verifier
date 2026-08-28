@@ -18,6 +18,7 @@ import (
 
 	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/controls"
 	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/eval"
+	"github.com/carabiner-labs/slsa-verifier/pkg/subject"
 )
 
 var ErrNotImplemented = errors.New("slsa: not implemented")
@@ -50,6 +51,12 @@ type VerifierImplementation interface {
 	// signer identities (layer 2). Currently a placeholder; identity-match
 	// flags will be added later.
 	CheckIdentities(ctx context.Context, opts *VerificationOptions, statement attestation.Statement) error
+
+	// CheckSubjects binds the statement to the artifacts the caller
+	// holds: every opts.Subjects entry must match a statement subject.
+	// Returns one match per expected subject, in order, so callers can
+	// report each; an empty list when nothing was asked.
+	CheckSubjects(ctx context.Context, opts *VerificationOptions, statement attestation.Statement) ([]subject.Match, error)
 
 	// ResolveCategory selects which catalog category to apply by looking
 	// up the statement's predicate-type track in the catalog (layer 3
@@ -141,6 +148,19 @@ func (*defaultImplementation) CheckIdentities(_ context.Context, opts *Verificat
 		return nil
 	}
 	return ErrIdentityMismatch
+}
+
+// CheckSubjects matches every expected subject against the statement's
+// subjects. It never errors on a mismatch: the outcome is reported per
+// subject and the caller turns it into the verdict.
+func (*defaultImplementation) CheckSubjects(_ context.Context, opts *VerificationOptions, statement attestation.Statement) ([]subject.Match, error) {
+	if opts == nil || len(opts.Subjects) == 0 {
+		return nil, nil
+	}
+	if statement == nil {
+		return nil, errors.New("statement is required to check subjects")
+	}
+	return subject.MatchAll(opts.Subjects, statement.GetSubjects()), nil
 }
 
 // ResolveCategory routes the statement to a catalog category. The track
