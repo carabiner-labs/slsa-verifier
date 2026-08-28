@@ -1,0 +1,48 @@
+{
+  "_type": "https://in-toto.io/Statement/v1",
+  "subject": [
+    {
+      "name": "MODULE.bazel",
+      "digest": {
+        "sha256": "06ce330900a7d6403bc8d88e5dfad6aeeb8ae40179f66bb89e69c8bf6f6b1a0b"
+      }
+    }
+  ],
+  "predicateType": "https://slsa.dev/provenance/v1",
+  "predicate": {
+    "buildDefinition": {
+      "buildType": "https://actions.github.io/buildtypes/workflow/v1",
+      "externalParameters": {
+        "workflow": {
+          "ref": "refs/heads/publish-to-bcr",
+          "repository": "https://github.com/aspect-build/rules_lint",
+          "path": ".github/workflows/release.yml"
+        }
+      },
+      "internalParameters": {
+        "github": {
+          "event_name": "workflow_dispatch",
+          "repository_id": "631710741",
+          "repository_owner_id": "60951090",
+          "runner_environment": "github-hosted"
+        }
+      },
+      "resolvedDependencies": [
+        {
+          "uri": "git+https://github.com/aspect-build/rules_lint@refs/heads/publish-to-bcr",
+          "digest": {
+            "gitCommit": "8f70009fde0c94ade6ce2a054b94718c819126ec"
+          }
+        }
+      ]
+    },
+    "runDetails": {
+      "builder": {
+        "id": "https://github.com/bazel-contrib/publish-to-bcr/.github/workflows/publish.yaml@refs/tags/v0.0.1"
+      },
+      "metadata": {
+        "invocationId": "https://github.com/aspect-build/rules_lint/actions/runs/14095611671/attempts/1"
+      }
+    }
+  }
+}

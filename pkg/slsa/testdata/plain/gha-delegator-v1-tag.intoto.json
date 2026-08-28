@@ -1,0 +1,250 @@
+{
+  "_type": "https://in-toto.io/Statement/v0.1",
+  "subject": [
+    {
+      "name": "gha_delegator-binary-linux-amd64-v13.0.30",
+      "digest": {
+        "sha256": "5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03"
+      }
+    }
+  ],
+  "predicateType": "https://slsa.dev/provenance/v1",
+  "predicate": {
+    "buildDefinition": {
+      "buildType": "https://github.com/slsa-framework/slsa-github-generator/delegator-generic@v0",
+      "externalParameters": {
+        "inputs": {
+          "artifact": "gha_delegator-binary-linux-amd64-v13.0.30",
+          "content": "hello",
+          "username": "***",
+          "rekor-log-public": false
+        },
+        "vars": {}
+      },
+      "internalParameters": {
+        "GITHUB_ACTOR_ID": "49289",
+        "GITHUB_EVENT_NAME": "push",
+        "GITHUB_BASE_REF": "",
+        "GITHUB_REF": "refs/tags/v13.0.30",
+        "GITHUB_REF_TYPE": "tag",
+        "GITHUB_REPOSITORY": "slsa-framework/example-package",
+        "GITHUB_REPOSITORY_ID": "486325809",
+        "GITHUB_REPOSITORY_OWNER_ID": "80431187",
+        "GITHUB_RUN_ATTEMPT": "1",
+        "GITHUB_RUN_ID": "8374570992",
+        "GITHUB_RUN_NUMBER": "95",
+        "GITHUB_SHA": "4e383a8215c979d61c6afd2e125cb2f559090adf",
+        "GITHUB_TRIGGERING_ACTOR_ID": "49289",
+        "GITHUB_WORKFLOW_REF": "slsa-framework/example-package/.github/workflows/verifier-e2e.all.workflow_dispatch.main.all.slsa3.yml@refs/tags/v13.0.30",
+        "GITHUB_WORKFLOW_SHA": "4e383a8215c979d61c6afd2e125cb2f559090adf",
+        "GITHUB_EVENT_PAYLOAD": {
+          "after": "4e383a8215c979d61c6afd2e125cb2f559090adf",
+          "base_ref": "refs/heads/main",
+          "before": "0000000000000000000000000000000000000000",
+          "commits": [],
+          "compare": "https://github.com/slsa-framework/example-package/compare/v13.0.30",
+          "created": true,
+          "deleted": false,
+          "enterprise": {
+            "avatar_url": "https://avatars.githubusercontent.com/b/102459?v=4",
+            "created_at": "2023-12-08T05:54:26Z",
+            "description": "Open Source Security Foundation (OpenSSF)",
+            "html_url": "https://github.com/enterprises/openssf",
+            "id": 102459,
+            "name": "Open Source Security Foundation",
+            "node_id": "E_kgDOAAGQOw",
+            "slug": "openssf",
+            "updated_at": "2024-01-06T00:47:02Z",
+            "website_url": "https://openssf.org/"
+          },
+          "forced": false,
+          "head_commit": {
+            "author": {
+              "email": "64505099+laurentsimon@users.noreply.github.com",
+              "name": "laurentsimon",
+              "username": "laurentsimon"
+            },
+            "committer": {
+              "email": "noreply@github.com",
+              "name": "GitHub",
+              "username": "web-flow"
+            },
+            "distinct": true,
+            "id": "4e383a8215c979d61c6afd2e125cb2f559090adf",
+            "message": "Update verifier-e2e.all.workflow_dispatch.main.all.slsa3.yml\n\nSigned-off-by: laurentsimon <64505099+laurentsimon@users.noreply.github.com>",
+            "timestamp": "2024-03-21T05:01:51-07:00",
+            "tree_id": "50c3c4dc6224587a7d3b311b43818da9db204375",
+            "url": "https://github.com/slsa-framework/example-package/commit/4e383a8215c979d61c6afd2e125cb2f559090adf"
+          },
+          "organization": {
+            "avatar_url": "https://avatars.githubusercontent.com/u/80431187?v=4",
+            "description": "Supply-chain Levels for Software Artifacts",
+            "events_url": "https://api.github.com/orgs/slsa-framework/events",
+            "hooks_url": "https://api.github.com/orgs/slsa-framework/hooks",
+            "id": 80431187,
+            "issues_url": "https://api.github.com/orgs/slsa-framework/issues",
+            "login": "slsa-framework",
+            "members_url": "https://api.github.com/orgs/slsa-framework/members{/member}",
+            "node_id": "MDEyOk9yZ2FuaXphdGlvbjgwNDMxMTg3",
+            "public_members_url": "https://api.github.com/orgs/slsa-framework/public_members{/member}",
+            "repos_url": "https://api.github.com/orgs/slsa-framework/repos",
+            "url": "https://api.github.com/orgs/slsa-framework"
+          },
+          "pusher": {
+            "email": "ianlewis@google.com",
+            "name": "ianlewis"
+          },
+          "ref": "refs/tags/v13.0.30",
+          "repository": {
+            "allow_forking": true,
+            "archive_url": "https://api.github.com/repos/slsa-framework/example-package/{archive_format}{/ref}",
+            "archived": false,
+            "assignees_url": "https://api.github.com/repos/slsa-framework/example-package/assignees{/user}",
+            "blobs_url": "https://api.github.com/repos/slsa-framework/example-package/git/blobs{/sha}",
+            "branches_url": "https://api.github.com/repos/slsa-framework/example-package/branches{/branch}",
+            "clone_url": "https://github.com/slsa-framework/example-package.git",
+            "collaborators_url": "https://api.github.com/repos/slsa-framework/example-package/collaborators{/collaborator}",
+            "comments_url": "https://api.github.com/repos/slsa-framework/example-package/comments{/number}",
+            "commits_url": "https://api.github.com/repos/slsa-framework/example-package/commits{/sha}",
+            "compare_url": "https://api.github.com/repos/slsa-framework/example-package/compare/{base}...{head}",
+            "contents_url": "https://api.github.com/repos/slsa-framework/example-package/contents/{+path}",
+            "contributors_url": "https://api.github.com/repos/slsa-framework/example-package/contributors",
+            "created_at": 1651087843,
+            "custom_properties": {},
+            "default_branch": "main",
+            "deployments_url": "https://api.github.com/repos/slsa-framework/example-package/deployments",
+            "description": null,
+            "disabled": false,
+            "downloads_url": "https://api.github.com/repos/slsa-framework/example-package/downloads",
+            "events_url": "https://api.github.com/repos/slsa-framework/example-package/events",
+            "fork": false,
+            "forks": 23,
+            "forks_count": 23,
+            "forks_url": "https://api.github.com/repos/slsa-framework/example-package/forks",
+            "full_name": "slsa-framework/example-package",
+            "git_commits_url": "https://api.github.com/repos/slsa-framework/example-package/git/commits{/sha}",
+            "git_refs_url": "https://api.github.com/repos/slsa-framework/example-package/git/refs{/sha}",
+            "git_tags_url": "https://api.github.com/repos/slsa-framework/example-package/git/tags{/sha}",
+            "git_url": "git://github.com/slsa-framework/example-package.git",
+            "has_discussions": false,
+            "has_downloads": true,
+            "has_issues": true,
+            "has_pages": false,
+            "has_projects": true,
+            "has_wiki": true,
+            "homepage": null,
+            "hooks_url": "https://api.github.com/repos/slsa-framework/example-package/hooks",
+            "html_url": "https://github.com/slsa-framework/example-package",
+            "id": 486325809,
+            "is_template": false,
+            "issue_comment_url": "https://api.github.com/repos/slsa-framework/example-package/issues/comments{/number}",
+            "issue_events_url": "https://api.github.com/repos/slsa-framework/example-package/issues/events{/number}",
+            "issues_url": "https://api.github.com/repos/slsa-framework/example-package/issues{/number}",
+            "keys_url": "https://api.github.com/repos/slsa-framework/example-package/keys{/key_id}",
+            "labels_url": "https://api.github.com/repos/slsa-framework/example-package/labels{/name}",
+            "language": "TypeScript",
+            "languages_url": "https://api.github.com/repos/slsa-framework/example-package/languages",
+            "license": {
+              "key": "apache-2.0",
+              "name": "Apache License 2.0",
+              "node_id": "MDc6TGljZW5zZTI=",
+              "spdx_id": "Apache-2.0",
+              "url": "https://api.github.com/licenses/apache-2.0"
+            },
+            "master_branch": "main",
+            "merges_url": "https://api.github.com/repos/slsa-framework/example-package/merges",
+            "milestones_url": "https://api.github.com/repos/slsa-framework/example-package/milestones{/number}",
+            "mirror_url": null,
+            "name": "example-package",
+            "node_id": "R_kgDOHPy-MQ",
+            "notifications_url": "https://api.github.com/repos/slsa-framework/example-package/notifications{?since,all,participating}",
+            "open_issues": 39,
+            "open_issues_count": 39,
+            "organization": "slsa-framework",
+            "owner": {
+              "avatar_url": "https://avatars.githubusercontent.com/u/80431187?v=4",
+              "email": null,
+              "events_url": "https://api.github.com/users/slsa-framework/events{/privacy}",
+              "followers_url": "https://api.github.com/users/slsa-framework/followers",
+              "following_url": "https://api.github.com/users/slsa-framework/following{/other_user}",
+              "gists_url": "https://api.github.com/users/slsa-framework/gists{/gist_id}",
+              "gravatar_id": "",
+              "html_url": "https://github.com/slsa-framework",
+              "id": 80431187,
+              "login": "slsa-framework",
+              "name": "slsa-framework",
+              "node_id": "MDEyOk9yZ2FuaXphdGlvbjgwNDMxMTg3",
+              "organizations_url": "https://api.github.com/users/slsa-framework/orgs",
+              "received_events_url": "https://api.github.com/users/slsa-framework/received_events",
+              "repos_url": "https://api.github.com/users/slsa-framework/repos",
+              "site_admin": false,
+              "starred_url": "https://api.github.com/users/slsa-framework/starred{/owner}{/repo}",
+              "subscriptions_url": "https://api.github.com/users/slsa-framework/subscriptions",
+              "type": "Organization",
+              "url": "https://api.github.com/users/slsa-framework"
+            },
+            "private": false,
+            "pulls_url": "https://api.github.com/repos/slsa-framework/example-package/pulls{/number}",
+            "pushed_at": 1711022582,
+            "releases_url": "https://api.github.com/repos/slsa-framework/example-package/releases{/id}",
+            "size": 10260,
+            "ssh_url": "git@github.com:slsa-framework/example-package.git",
+            "stargazers": 15,
+            "stargazers_count": 15,
+            "stargazers_url": "https://api.github.com/repos/slsa-framework/example-package/stargazers",
+            "statuses_url": "https://api.github.com/repos/slsa-framework/example-package/statuses/{sha}",
+            "subscribers_url": "https://api.github.com/repos/slsa-framework/example-package/subscribers",
+            "subscription_url": "https://api.github.com/repos/slsa-framework/example-package/subscription",
+            "svn_url": "https://github.com/slsa-framework/example-package",
+            "tags_url": "https://api.github.com/repos/slsa-framework/example-package/tags",
+            "teams_url": "https://api.github.com/repos/slsa-framework/example-package/teams",
+            "topics": [],
+            "trees_url": "https://api.github.com/repos/slsa-framework/example-package/git/trees{/sha}",
+            "updated_at": "2024-01-01T05:54:12Z",
+            "url": "https://github.com/slsa-framework/example-package",
+            "visibility": "public",
+            "watchers": 15,
+            "watchers_count": 15,
+            "web_commit_signoff_required": true
+          },
+          "sender": {
+            "avatar_url": "https://avatars.githubusercontent.com/u/49289?v=4",
+            "events_url": "https://api.github.com/users/ianlewis/events{/privacy}",
+            "followers_url": "https://api.github.com/users/ianlewis/followers",
+            "following_url": "https://api.github.com/users/ianlewis/following{/other_user}",
+            "gists_url": "https://api.github.com/users/ianlewis/gists{/gist_id}",
+            "gravatar_id": "",
+            "html_url": "https://github.com/ianlewis",
+            "id": 49289,
+            "login": "ianlewis",
+            "node_id": "MDQ6VXNlcjQ5Mjg5",
+            "organizations_url": "https://api.github.com/users/ianlewis/orgs",
+            "received_events_url": "https://api.github.com/users/ianlewis/received_events",
+            "repos_url": "https://api.github.com/users/ianlewis/repos",
+            "site_admin": false,
+            "starred_url": "https://api.github.com/users/ianlewis/starred{/owner}{/repo}",
+            "subscriptions_url": "https://api.github.com/users/ianlewis/subscriptions",
+            "type": "User",
+            "url": "https://api.github.com/users/ianlewis"
+          }
+        }
+      },
+      "resolvedDependencies": [
+        {
+          "uri": "git+https://github.com/slsa-framework/example-package@refs/tags/v13.0.30",
+          "digest": {
+            "gitCommit": "4e383a8215c979d61c6afd2e125cb2f559090adf"
+          }
+        }
+      ]
+    },
+    "runDetails": {
+      "builder": {
+        "id": "https://github.com/slsa-framework/example-trw/.github/workflows/builder_high-perms_slsa3.yml@refs/tags/v1.10.0"
+      },
+      "metadata": {
+        "invocationId": "https://github.com/slsa-framework/example-package/actions/runs/8374570992/attempts/1"
+      }
+    }
+  }
+}

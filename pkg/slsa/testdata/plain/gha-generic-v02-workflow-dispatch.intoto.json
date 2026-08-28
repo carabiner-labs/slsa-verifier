@@ -1,0 +1,208 @@
+{
+  "_type": "https://in-toto.io/Statement/v0.1",
+  "predicateType": "https://slsa.dev/provenance/v0.2",
+  "subject": [
+    {
+      "name": "artifact1",
+      "digest": {
+        "sha256": "482ce8c8f7e867da3a3c05a9aee637703e17470ed1cf882a9e5b405e8f82619d"
+      }
+    },
+    {
+      "name": "artifact2",
+      "digest": {
+        "sha256": "89cfc6954e88b2f92a7c2879d9eb085c42f3c7065d012a5066f450dbe59b2c00"
+      }
+    }
+  ],
+  "predicate": {
+    "builder": {
+      "id": "https://github.com/slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@refs/tags/v1.2.2"
+    },
+    "buildType": "https://github.com/slsa-framework/slsa-github-generator/generic@v1",
+    "invocation": {
+      "configSource": {
+        "uri": "git+https://github.com/laurentsimon/slsa-on-github-test@refs/heads/main",
+        "digest": {
+          "sha1": "e52ca19ae4944c39dc6060b514ac496e62a9a077"
+        },
+        "entryPoint": ".github/workflows/slsa-generic.yml"
+      },
+      "parameters": {
+        "event_inputs": {
+          "release_version": "(for example, 0.1.0)",
+          "some_bool": "true",
+          "some_integer": "123"
+        }
+      },
+      "environment": {
+        "github_actor": "laurentsimon",
+        "github_actor_id": "64505099",
+        "github_base_ref": "",
+        "github_event_name": "workflow_dispatch",
+        "github_event_payload": {
+          "inputs": {
+            "release_version": "(for example, 0.1.0)",
+            "some_bool": "true",
+            "some_integer": "123"
+          },
+          "ref": "refs/heads/main",
+          "repository": {
+            "allow_forking": true,
+            "archive_url": "https://api.github.com/repos/laurentsimon/slsa-on-github-test/{archive_format}{/ref}",
+            "archived": false,
+            "assignees_url": "https://api.github.com/repos/laurentsimon/slsa-on-github-test/assignees{/user}",
+            "blobs_url": "https://api.github.com/repos/laurentsimon/slsa-on-github-test/git/blobs{/sha}",
+            "branches_url": "https://api.github.com/repos/laurentsimon/slsa-on-github-test/branches{/branch}",
+            "clone_url": "https://github.com/laurentsimon/slsa-on-github-test.git",
+            "collaborators_url": "https://api.github.com/repos/laurentsimon/slsa-on-github-test/collaborators{/collaborator}",
+            "comments_url": "https://api.github.com/repos/laurentsimon/slsa-on-github-test/comments{/number}",
+            "commits_url": "https://api.github.com/repos/laurentsimon/slsa-on-github-test/commits{/sha}",
+            "compare_url": "https://api.github.com/repos/laurentsimon/slsa-on-github-test/compare/{base}...{head}",
+            "contents_url": "https://api.github.com/repos/laurentsimon/slsa-on-github-test/contents/{+path}",
+            "contributors_url": "https://api.github.com/repos/laurentsimon/slsa-on-github-test/contributors",
+            "created_at": "2022-02-05T01:10:46Z",
+            "default_branch": "main",
+            "deployments_url": "https://api.github.com/repos/laurentsimon/slsa-on-github-test/deployments",
+            "description": "Test for SLSA",
+            "disabled": false,
+            "downloads_url": "https://api.github.com/repos/laurentsimon/slsa-on-github-test/downloads",
+            "events_url": "https://api.github.com/repos/laurentsimon/slsa-on-github-test/events",
+            "fork": false,
+            "forks": 1,
+            "forks_count": 1,
+            "forks_url": "https://api.github.com/repos/laurentsimon/slsa-on-github-test/forks",
+            "full_name": "laurentsimon/slsa-on-github-test",
+            "git_commits_url": "https://api.github.com/repos/laurentsimon/slsa-on-github-test/git/commits{/sha}",
+            "git_refs_url": "https://api.github.com/repos/laurentsimon/slsa-on-github-test/git/refs{/sha}",
+            "git_tags_url": "https://api.github.com/repos/laurentsimon/slsa-on-github-test/git/tags{/sha}",
+            "git_url": "git://github.com/laurentsimon/slsa-on-github-test.git",
+            "has_discussions": false,
+            "has_downloads": true,
+            "has_issues": true,
+            "has_pages": false,
+            "has_projects": true,
+            "has_wiki": true,
+            "homepage": null,
+            "hooks_url": "https://api.github.com/repos/laurentsimon/slsa-on-github-test/hooks",
+            "html_url": "https://github.com/laurentsimon/slsa-on-github-test",
+            "id": 455743396,
+            "is_template": false,
+            "issue_comment_url": "https://api.github.com/repos/laurentsimon/slsa-on-github-test/issues/comments{/number}",
+            "issue_events_url": "https://api.github.com/repos/laurentsimon/slsa-on-github-test/issues/events{/number}",
+            "issues_url": "https://api.github.com/repos/laurentsimon/slsa-on-github-test/issues{/number}",
+            "keys_url": "https://api.github.com/repos/laurentsimon/slsa-on-github-test/keys{/key_id}",
+            "labels_url": "https://api.github.com/repos/laurentsimon/slsa-on-github-test/labels{/name}",
+            "language": "Shell",
+            "languages_url": "https://api.github.com/repos/laurentsimon/slsa-on-github-test/languages",
+            "license": {
+              "key": "apache-2.0",
+              "name": "Apache License 2.0",
+              "node_id": "MDc6TGljZW5zZTI=",
+              "spdx_id": "Apache-2.0",
+              "url": "https://api.github.com/licenses/apache-2.0"
+            },
+            "merges_url": "https://api.github.com/repos/laurentsimon/slsa-on-github-test/merges",
+            "milestones_url": "https://api.github.com/repos/laurentsimon/slsa-on-github-test/milestones{/number}",
+            "mirror_url": null,
+            "name": "slsa-on-github-test",
+            "node_id": "R_kgDOGyoXpA",
+            "notifications_url": "https://api.github.com/repos/laurentsimon/slsa-on-github-test/notifications{?since,all,participating}",
+            "open_issues": 35,
+            "open_issues_count": 35,
+            "owner": {
+              "avatar_url": "https://avatars.githubusercontent.com/u/64505099?v=4",
+              "events_url": "https://api.github.com/users/laurentsimon/events{/privacy}",
+              "followers_url": "https://api.github.com/users/laurentsimon/followers",
+              "following_url": "https://api.github.com/users/laurentsimon/following{/other_user}",
+              "gists_url": "https://api.github.com/users/laurentsimon/gists{/gist_id}",
+              "gravatar_id": "",
+              "html_url": "https://github.com/laurentsimon",
+              "id": 64505099,
+              "login": "laurentsimon",
+              "node_id": "MDQ6VXNlcjY0NTA1MDk5",
+              "organizations_url": "https://api.github.com/users/laurentsimon/orgs",
+              "received_events_url": "https://api.github.com/users/laurentsimon/received_events",
+              "repos_url": "https://api.github.com/users/laurentsimon/repos",
+              "site_admin": false,
+              "starred_url": "https://api.github.com/users/laurentsimon/starred{/owner}{/repo}",
+              "subscriptions_url": "https://api.github.com/users/laurentsimon/subscriptions",
+              "type": "User",
+              "url": "https://api.github.com/users/laurentsimon"
+            },
+            "private": false,
+            "pulls_url": "https://api.github.com/repos/laurentsimon/slsa-on-github-test/pulls{/number}",
+            "pushed_at": "2023-01-12T01:21:16Z",
+            "releases_url": "https://api.github.com/repos/laurentsimon/slsa-on-github-test/releases{/id}",
+            "size": 793,
+            "ssh_url": "git@github.com:laurentsimon/slsa-on-github-test.git",
+            "stargazers_count": 1,
+            "stargazers_url": "https://api.github.com/repos/laurentsimon/slsa-on-github-test/stargazers",
+            "statuses_url": "https://api.github.com/repos/laurentsimon/slsa-on-github-test/statuses/{sha}",
+            "subscribers_url": "https://api.github.com/repos/laurentsimon/slsa-on-github-test/subscribers",
+            "subscription_url": "https://api.github.com/repos/laurentsimon/slsa-on-github-test/subscription",
+            "svn_url": "https://github.com/laurentsimon/slsa-on-github-test",
+            "tags_url": "https://api.github.com/repos/laurentsimon/slsa-on-github-test/tags",
+            "teams_url": "https://api.github.com/repos/laurentsimon/slsa-on-github-test/teams",
+            "topics": [],
+            "trees_url": "https://api.github.com/repos/laurentsimon/slsa-on-github-test/git/trees{/sha}",
+            "updated_at": "2022-12-15T00:05:07Z",
+            "url": "https://api.github.com/repos/laurentsimon/slsa-on-github-test",
+            "visibility": "public",
+            "watchers": 1,
+            "watchers_count": 1,
+            "web_commit_signoff_required": false
+          },
+          "sender": {
+            "avatar_url": "https://avatars.githubusercontent.com/u/64505099?v=4",
+            "events_url": "https://api.github.com/users/laurentsimon/events{/privacy}",
+            "followers_url": "https://api.github.com/users/laurentsimon/followers",
+            "following_url": "https://api.github.com/users/laurentsimon/following{/other_user}",
+            "gists_url": "https://api.github.com/users/laurentsimon/gists{/gist_id}",
+            "gravatar_id": "",
+            "html_url": "https://github.com/laurentsimon",
+            "id": 64505099,
+            "login": "laurentsimon",
+            "node_id": "MDQ6VXNlcjY0NTA1MDk5",
+            "organizations_url": "https://api.github.com/users/laurentsimon/orgs",
+            "received_events_url": "https://api.github.com/users/laurentsimon/received_events",
+            "repos_url": "https://api.github.com/users/laurentsimon/repos",
+            "site_admin": false,
+            "starred_url": "https://api.github.com/users/laurentsimon/starred{/owner}{/repo}",
+            "subscriptions_url": "https://api.github.com/users/laurentsimon/subscriptions",
+            "type": "User",
+            "url": "https://api.github.com/users/laurentsimon"
+          },
+          "workflow": ".github/workflows/slsa-generic.yml"
+        },
+        "github_head_ref": "",
+        "github_ref": "refs/heads/main",
+        "github_ref_type": "branch",
+        "github_repository_id": "455743396",
+        "github_repository_owner": "laurentsimon",
+        "github_repository_owner_id": "64505099",
+        "github_run_attempt": "1",
+        "github_run_id": "4068146969",
+        "github_run_number": "31",
+        "github_sha1": "e52ca19ae4944c39dc6060b514ac496e62a9a077"
+      }
+    },
+    "metadata": {
+      "buildInvocationID": "4068146969-1",
+      "completeness": {
+        "parameters": true,
+        "environment": false,
+        "materials": false
+      },
+      "reproducible": false
+    },
+    "materials": [
+      {
+        "uri": "git+https://github.com/laurentsimon/slsa-on-github-test@refs/heads/main",
+        "digest": {
+          "sha1": "e52ca19ae4944c39dc6060b514ac496e62a9a077"
+        }
+      }
+    ]
+  }
+}

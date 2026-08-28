@@ -1,0 +1,230 @@
+{
+  "_type": "https://in-toto.io/Statement/v0.1",
+  "predicateType": "https://slsa.dev/provenance/v0.2",
+  "subject": [
+    {
+      "name": "artifact1",
+      "digest": {
+        "sha256": "482ce8c8f7e867da3a3c05a9aee637703e17470ed1cf882a9e5b405e8f82619d"
+      }
+    },
+    {
+      "name": "artifact2",
+      "digest": {
+        "sha256": "89cfc6954e88b2f92a7c2879d9eb085c42f3c7065d012a5066f450dbe59b2c00"
+      }
+    }
+  ],
+  "predicate": {
+    "builder": {
+      "id": "https://github.com/slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@refs/tags/v1.2.2"
+    },
+    "buildType": "https://github.com/slsa-framework/slsa-github-generator/generic@v1",
+    "invocation": {
+      "configSource": {
+        "uri": "git+https://github.com/asraa/slsa-on-github-test@refs/tags/v1.5.0",
+        "digest": {
+          "sha1": "f24af35a7c714f1b4eeb53afefb57fa11bd5c95c"
+        },
+        "entryPoint": ".github/workflows/slsa-generic.yml"
+      },
+      "parameters": {},
+      "environment": {
+        "github_actor": "asraa",
+        "github_actor_id": "5194569",
+        "github_base_ref": "",
+        "github_event_name": "push",
+        "github_event_payload": {
+          "after": "63c3890e60f445459f1d5b31205766823716319e",
+          "base_ref": null,
+          "before": "0000000000000000000000000000000000000000",
+          "commits": [],
+          "compare": "https://github.com/asraa/slsa-on-github-test/compare/v1.5.0",
+          "created": true,
+          "deleted": false,
+          "forced": false,
+          "head_commit": {
+            "author": {
+              "email": "asraa@google.com",
+              "name": "Asra Ali",
+              "username": "asraa"
+            },
+            "committer": {
+              "email": "asraa@google.com",
+              "name": "Asra Ali",
+              "username": "asraa"
+            },
+            "distinct": true,
+            "id": "f24af35a7c714f1b4eeb53afefb57fa11bd5c95c",
+            "message": "add new workflow\n\nSigned-off-by: Asra Ali <asraa@google.com>",
+            "timestamp": "2023-02-01T11:48:41-08:00",
+            "tree_id": "60706fb9d70c8ff10e2e2ee82b794a685ada7b5f",
+            "url": "https://github.com/asraa/slsa-on-github-test/commit/f24af35a7c714f1b4eeb53afefb57fa11bd5c95c"
+          },
+          "pusher": {
+            "email": "asraa@google.com",
+            "name": "asraa"
+          },
+          "ref": "refs/tags/v1.5.0",
+          "repository": {
+            "allow_forking": true,
+            "archive_url": "https://api.github.com/repos/asraa/slsa-on-github-test/{archive_format}{/ref}",
+            "archived": false,
+            "assignees_url": "https://api.github.com/repos/asraa/slsa-on-github-test/assignees{/user}",
+            "blobs_url": "https://api.github.com/repos/asraa/slsa-on-github-test/git/blobs{/sha}",
+            "branches_url": "https://api.github.com/repos/asraa/slsa-on-github-test/branches{/branch}",
+            "clone_url": "https://github.com/asraa/slsa-on-github-test.git",
+            "collaborators_url": "https://api.github.com/repos/asraa/slsa-on-github-test/collaborators{/collaborator}",
+            "comments_url": "https://api.github.com/repos/asraa/slsa-on-github-test/comments{/number}",
+            "commits_url": "https://api.github.com/repos/asraa/slsa-on-github-test/commits{/sha}",
+            "compare_url": "https://api.github.com/repos/asraa/slsa-on-github-test/compare/{base}...{head}",
+            "contents_url": "https://api.github.com/repos/asraa/slsa-on-github-test/contents/{+path}",
+            "contributors_url": "https://api.github.com/repos/asraa/slsa-on-github-test/contributors",
+            "created_at": 1654718834,
+            "default_branch": "main",
+            "deployments_url": "https://api.github.com/repos/asraa/slsa-on-github-test/deployments",
+            "description": "Test for SLSA",
+            "disabled": false,
+            "downloads_url": "https://api.github.com/repos/asraa/slsa-on-github-test/downloads",
+            "events_url": "https://api.github.com/repos/asraa/slsa-on-github-test/events",
+            "fork": true,
+            "forks": 0,
+            "forks_count": 0,
+            "forks_url": "https://api.github.com/repos/asraa/slsa-on-github-test/forks",
+            "full_name": "asraa/slsa-on-github-test",
+            "git_commits_url": "https://api.github.com/repos/asraa/slsa-on-github-test/git/commits{/sha}",
+            "git_refs_url": "https://api.github.com/repos/asraa/slsa-on-github-test/git/refs{/sha}",
+            "git_tags_url": "https://api.github.com/repos/asraa/slsa-on-github-test/git/tags{/sha}",
+            "git_url": "git://github.com/asraa/slsa-on-github-test.git",
+            "has_discussions": false,
+            "has_downloads": true,
+            "has_issues": false,
+            "has_pages": false,
+            "has_projects": true,
+            "has_wiki": true,
+            "homepage": null,
+            "hooks_url": "https://api.github.com/repos/asraa/slsa-on-github-test/hooks",
+            "html_url": "https://github.com/asraa/slsa-on-github-test",
+            "id": 501395242,
+            "is_template": false,
+            "issue_comment_url": "https://api.github.com/repos/asraa/slsa-on-github-test/issues/comments{/number}",
+            "issue_events_url": "https://api.github.com/repos/asraa/slsa-on-github-test/issues/events{/number}",
+            "issues_url": "https://api.github.com/repos/asraa/slsa-on-github-test/issues{/number}",
+            "keys_url": "https://api.github.com/repos/asraa/slsa-on-github-test/keys{/key_id}",
+            "labels_url": "https://api.github.com/repos/asraa/slsa-on-github-test/labels{/name}",
+            "language": "Go",
+            "languages_url": "https://api.github.com/repos/asraa/slsa-on-github-test/languages",
+            "license": {
+              "key": "apache-2.0",
+              "name": "Apache License 2.0",
+              "node_id": "MDc6TGljZW5zZTI=",
+              "spdx_id": "Apache-2.0",
+              "url": "https://api.github.com/licenses/apache-2.0"
+            },
+            "master_branch": "main",
+            "merges_url": "https://api.github.com/repos/asraa/slsa-on-github-test/merges",
+            "milestones_url": "https://api.github.com/repos/asraa/slsa-on-github-test/milestones{/number}",
+            "mirror_url": null,
+            "name": "slsa-on-github-test",
+            "node_id": "R_kgDOHeKvKg",
+            "notifications_url": "https://api.github.com/repos/asraa/slsa-on-github-test/notifications{?since,all,participating}",
+            "open_issues": 0,
+            "open_issues_count": 0,
+            "owner": {
+              "avatar_url": "https://avatars.githubusercontent.com/u/5194569?v=4",
+              "email": "asraa@google.com",
+              "events_url": "https://api.github.com/users/asraa/events{/privacy}",
+              "followers_url": "https://api.github.com/users/asraa/followers",
+              "following_url": "https://api.github.com/users/asraa/following{/other_user}",
+              "gists_url": "https://api.github.com/users/asraa/gists{/gist_id}",
+              "gravatar_id": "",
+              "html_url": "https://github.com/asraa",
+              "id": 5194569,
+              "login": "asraa",
+              "name": "asraa",
+              "node_id": "MDQ6VXNlcjUxOTQ1Njk=",
+              "organizations_url": "https://api.github.com/users/asraa/orgs",
+              "received_events_url": "https://api.github.com/users/asraa/received_events",
+              "repos_url": "https://api.github.com/users/asraa/repos",
+              "site_admin": false,
+              "starred_url": "https://api.github.com/users/asraa/starred{/owner}{/repo}",
+              "subscriptions_url": "https://api.github.com/users/asraa/subscriptions",
+              "type": "User",
+              "url": "https://api.github.com/users/asraa"
+            },
+            "private": false,
+            "pulls_url": "https://api.github.com/repos/asraa/slsa-on-github-test/pulls{/number}",
+            "pushed_at": 1675293079,
+            "releases_url": "https://api.github.com/repos/asraa/slsa-on-github-test/releases{/id}",
+            "size": 230,
+            "ssh_url": "git@github.com:asraa/slsa-on-github-test.git",
+            "stargazers": 0,
+            "stargazers_count": 0,
+            "stargazers_url": "https://api.github.com/repos/asraa/slsa-on-github-test/stargazers",
+            "statuses_url": "https://api.github.com/repos/asraa/slsa-on-github-test/statuses/{sha}",
+            "subscribers_url": "https://api.github.com/repos/asraa/slsa-on-github-test/subscribers",
+            "subscription_url": "https://api.github.com/repos/asraa/slsa-on-github-test/subscription",
+            "svn_url": "https://github.com/asraa/slsa-on-github-test",
+            "tags_url": "https://api.github.com/repos/asraa/slsa-on-github-test/tags",
+            "teams_url": "https://api.github.com/repos/asraa/slsa-on-github-test/teams",
+            "topics": [],
+            "trees_url": "https://api.github.com/repos/asraa/slsa-on-github-test/git/trees{/sha}",
+            "updated_at": "2022-06-08T20:09:58Z",
+            "url": "https://github.com/asraa/slsa-on-github-test",
+            "visibility": "public",
+            "watchers": 0,
+            "watchers_count": 0,
+            "web_commit_signoff_required": false
+          },
+          "sender": {
+            "avatar_url": "https://avatars.githubusercontent.com/u/5194569?v=4",
+            "events_url": "https://api.github.com/users/asraa/events{/privacy}",
+            "followers_url": "https://api.github.com/users/asraa/followers",
+            "following_url": "https://api.github.com/users/asraa/following{/other_user}",
+            "gists_url": "https://api.github.com/users/asraa/gists{/gist_id}",
+            "gravatar_id": "",
+            "html_url": "https://github.com/asraa",
+            "id": 5194569,
+            "login": "asraa",
+            "node_id": "MDQ6VXNlcjUxOTQ1Njk=",
+            "organizations_url": "https://api.github.com/users/asraa/orgs",
+            "received_events_url": "https://api.github.com/users/asraa/received_events",
+            "repos_url": "https://api.github.com/users/asraa/repos",
+            "site_admin": false,
+            "starred_url": "https://api.github.com/users/asraa/starred{/owner}{/repo}",
+            "subscriptions_url": "https://api.github.com/users/asraa/subscriptions",
+            "type": "User",
+            "url": "https://api.github.com/users/asraa"
+          }
+        },
+        "github_head_ref": "",
+        "github_ref": "refs/tags/v1.5.0",
+        "github_ref_type": "tag",
+        "github_repository_id": "501395242",
+        "github_repository_owner": "asraa",
+        "github_repository_owner_id": "5194569",
+        "github_run_attempt": "1",
+        "github_run_id": "4069568961",
+        "github_run_number": "2",
+        "github_sha1": "f24af35a7c714f1b4eeb53afefb57fa11bd5c95c"
+      }
+    },
+    "metadata": {
+      "buildInvocationID": "4069568961-1",
+      "completeness": {
+        "parameters": true,
+        "environment": false,
+        "materials": false
+      },
+      "reproducible": false
+    },
+    "materials": [
+      {
+        "uri": "git+https://github.com/asraa/slsa-on-github-test@refs/tags/v1.5.0",
+        "digest": {
+          "sha1": "f24af35a7c714f1b4eeb53afefb57fa11bd5c95c"
+        }
+      }
+    ]
+  }
+}

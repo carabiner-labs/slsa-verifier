@@ -9,6 +9,15 @@ integration tests.
 | `plain/v02-build.intoto.json` | `https://slsa.dev/provenance/v0.2` |
 | `plain/v1-build.intoto.json` | `https://slsa.dev/provenance/v1` |
 | `plain/source.intoto.json` | `https://github.com/slsa-framework/slsa-source-poc/source-provenance/v1-draft` |
+| `plain/gha-generic-v02-tag.intoto.json` | v0.2, generic generator, tag push (`refs/tags/v1.5.0`) |
+| `plain/gha-go-v02-branch.intoto.json` | v0.2, Go builder, branch build (`refs/heads/main`, schedule) |
+| `plain/gha-generic-v02-workflow-dispatch.intoto.json` | v0.2, generic generator, `workflow_dispatch` with inputs |
+| `plain/gha-delegator-v1-tag.intoto.json` | v1, BYOB delegator, tag push with `base_ref` in the event payload |
+| `plain/github-attestation-v1-branch.intoto.json` | v1, GitHub artifact attestation, branch build |
+
+The `gha-*` and `github-attestation-*` fixtures are the statements of real
+provenance from the original slsa-verifier's test data (Apache-2.0), kept
+unsigned so the GitHub-specific buildType controls can be exercised offline.
 
 These are minimal, hand-crafted fixtures — just enough content to round-trip
 through the upstream proto definitions and exercise a CEL expression. They are
