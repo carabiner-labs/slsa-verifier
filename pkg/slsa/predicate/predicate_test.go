@@ -8,6 +8,7 @@ import (
 
 	"github.com/carabiner-dev/attestation"
 	collectorpred "github.com/carabiner-dev/collector/predicate"
+	provenancev02 "github.com/in-toto/attestation/go/predicates/provenance/v02"
 	provenancev1 "github.com/in-toto/attestation/go/predicates/provenance/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -55,8 +56,13 @@ func TestParserMalformedJSONReturnsNotCorrectFormat(t *testing.T) {
 	t.Parallel()
 
 	p, _ := predicate.NewParser(attestation.PredicateType(eval.PredicateProvenanceV1))
-	_, err := p.Parse([]byte(`{"unknownField": true}`))
-	assert.ErrorIs(t, err, attestation.ErrNotCorrectFormat)
+	_, err := p.Parse([]byte(`{"buildDefinition": [`))
+	require.ErrorIs(t, err, attestation.ErrNotCorrectFormat)
+
+	// A field the proto does not define is a producer extension, not a
+	// reason to reject the predicate.
+	_, err = p.Parse([]byte(`{"unknownField": true}`))
+	require.NoError(t, err)
 }
 
 // TestInitReplacesCollectorRegistry verifies that importing this package
@@ -75,4 +81,32 @@ func TestInitReplacesCollectorRegistry(t *testing.T) {
 
 	// And no parsers for non-SLSA types should remain.
 	assert.Len(t, collectorpred.Parsers, len(eval.KnownPredicateTypes()))
+}
+
+// Real v0.2 provenance spells the invocation id buildInvocationID, as
+// in-toto-golang does; the proto names it buildInvocationId. The parser
+// maps it so the field survives, and drops unknown producer fields
+// instead of rejecting the predicate.
+func TestParseV02NormalizesInvocationIDAndDiscardsUnknown(t *testing.T) {
+	t.Parallel()
+	p, ok := predicate.NewParser("https://slsa.dev/provenance/v0.2")
+	require.True(t, ok)
+
+	pred, err := p.Parse([]byte(`{
+		"builder": {"id": "https://example.com/builder"},
+		"buildType": "https://example.com/buildType@v0.2",
+		"metadata": {"buildInvocationID": "run-42", "producerSpecific": true},
+		"vendorExtension": {"x": 1}
+	}`))
+	require.NoError(t, err)
+	msg, ok := pred.GetParsed().(*provenancev02.Provenance)
+	require.True(t, ok)
+	assert.Equal(t, "run-42", msg.GetMetadata().GetBuildInvocationId())
+
+	// The proto spelling keeps working, and wins when both are present.
+	pred, err = p.Parse([]byte(`{"metadata": {"buildInvocationId": "proto", "buildInvocationID": "alias"}}`))
+	require.NoError(t, err)
+	msg, ok = pred.GetParsed().(*provenancev02.Provenance)
+	require.True(t, ok)
+	assert.Equal(t, "proto", msg.GetMetadata().GetBuildInvocationId())
 }

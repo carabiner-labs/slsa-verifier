@@ -675,13 +675,214 @@ func TestVerifyBuildTypeParamsMustBeSet(t *testing.T) {
 	res, err := v.Verify(context.Background(), stmt, append(base, slsa.WithParam("expected_builder", "https://example.com/builder"))...)
 	require.NoError(t, err)
 	assert.Equal(t, slsa.StatusPass, res.Status)
-	require.Len(t, res.BuildTypeResults, 1)
-	assert.Equal(t, slsa.StatusPass, res.BuildTypeResults[0].Status)
+	assert.Equal(t, slsa.StatusPass, buildTypeResult(t, res, "example-test-builder-id").Status)
 
 	res, err = v.Verify(context.Background(), stmt, append(base, slsa.WithSkipBuildTypeChecks(true))...)
 	require.NoError(t, err)
 	assert.Equal(t, slsa.StatusPass, res.Status)
-	require.Len(t, res.BuildTypeResults, 1)
-	assert.Equal(t, slsa.StatusSkipped, res.BuildTypeResults[0].Status)
-	assert.Contains(t, res.BuildTypeResults[0].Message, "expected_builder")
+	example := buildTypeResult(t, res, "example-test-builder-id")
+	assert.Equal(t, slsa.StatusSkipped, example.Status)
+	assert.Contains(t, example.Message, "expected_builder")
+}
+
+// buildTypeResult returns the buildType-layer result with the given id.
+func buildTypeResult(t *testing.T, res *slsa.Result, id string) *slsa.ControlResult {
+	t.Helper()
+	for _, cr := range res.BuildTypeResults {
+		if cr.ID == id {
+			return cr
+		}
+	}
+	require.Failf(t, "control missing", "no buildType result %q in %+v", id, res.BuildTypeResults)
+	return nil
+}
+
+// TestGitHubBuildTypeControls runs the GitHub-specific buildType controls
+// over real generator provenance for each family: branch and tag
+// expectations, the tag-build branch fallback, semantic versions, and
+// workflow_dispatch inputs.
+func TestGitHubBuildTypeControls(t *testing.T) {
+	t.Parallel()
+
+	v, err := slsa.New()
+	require.NoError(t, err)
+
+	for _, tc := range []struct {
+		name    string
+		fixture string
+		params  map[string]any
+		want    map[string]slsa.Status // control id → status; absent ids are not asserted
+	}{
+		// --- v0.2 Go builder, branch build triggered by schedule ---
+		{
+			name:    "branch build, expected branch bare",
+			fixture: "gha-go-v02-branch.intoto.json",
+			params:  map[string]any{"expected_branch": "main"},
+			want:    map[string]slsa.Status{"github-source-branch": slsa.StatusPass},
+		},
+		{
+			name:    "branch build, expected branch as ref",
+			fixture: "gha-go-v02-branch.intoto.json",
+			params:  map[string]any{"expected_branch": "refs/heads/main"},
+			want:    map[string]slsa.Status{"github-source-branch": slsa.StatusPass},
+		},
+		{
+			name:    "branch build, other branch",
+			fixture: "gha-go-v02-branch.intoto.json",
+			params:  map[string]any{"expected_branch": "release"},
+			want:    map[string]slsa.Status{"github-source-branch": slsa.StatusFail},
+		},
+		{
+			name:    "branch build cannot meet a tag expectation",
+			fixture: "gha-go-v02-branch.intoto.json",
+			params:  map[string]any{"expected_tag": "v1.0.0", "expected_versioned_tag": "v1"},
+			want:    map[string]slsa.Status{"github-source-tag": slsa.StatusFail, "github-source-versioned-tag": slsa.StatusFail},
+		},
+		{
+			name:    "unset expectations are skipped once one is set",
+			fixture: "gha-go-v02-branch.intoto.json",
+			params:  map[string]any{"expected_branch": "main"},
+			want:    map[string]slsa.Status{"github-source-tag": slsa.StatusSkipped, "github-source-versioned-tag": slsa.StatusSkipped, "github-workflow-inputs": slsa.StatusSkipped},
+		},
+		// --- v0.2 generic generator, tag push, no base_ref anywhere ---
+		{
+			name:    "tag build, exact tag",
+			fixture: "gha-generic-v02-tag.intoto.json",
+			params:  map[string]any{"expected_tag": "v1.5.0"},
+			want:    map[string]slsa.Status{"github-source-tag": slsa.StatusPass},
+		},
+		{
+			name:    "tag build, exact tag as ref",
+			fixture: "gha-generic-v02-tag.intoto.json",
+			params:  map[string]any{"expected_tag": "refs/tags/v1.5.0"},
+			want:    map[string]slsa.Status{"github-source-tag": slsa.StatusPass},
+		},
+		{
+			name:    "tag build, other tag",
+			fixture: "gha-generic-v02-tag.intoto.json",
+			params:  map[string]any{"expected_tag": "v1.5.1"},
+			want:    map[string]slsa.Status{"github-source-tag": slsa.StatusFail},
+		},
+		{
+			name:    "tag build, versioned tag major",
+			fixture: "gha-generic-v02-tag.intoto.json",
+			params:  map[string]any{"expected_versioned_tag": "v1"},
+			want:    map[string]slsa.Status{"github-source-versioned-tag": slsa.StatusPass},
+		},
+		{
+			name:    "tag build, versioned tag minor",
+			fixture: "gha-generic-v02-tag.intoto.json",
+			params:  map[string]any{"expected_versioned_tag": "v1.5"},
+			want:    map[string]slsa.Status{"github-source-versioned-tag": slsa.StatusPass},
+		},
+		{
+			name:    "tag build, versioned tag other minor",
+			fixture: "gha-generic-v02-tag.intoto.json",
+			params:  map[string]any{"expected_versioned_tag": "v1.6"},
+			want:    map[string]slsa.Status{"github-source-versioned-tag": slsa.StatusFail},
+		},
+		{
+			name:    "tag build without a recorded branch cannot meet a branch expectation",
+			fixture: "gha-generic-v02-tag.intoto.json",
+			params:  map[string]any{"expected_branch": "main"},
+			want:    map[string]slsa.Status{"github-source-branch": slsa.StatusFail},
+		},
+		// --- v1 BYOB delegator, tag push whose event payload names the branch ---
+		{
+			name:    "v1 tag build, exact tag",
+			fixture: "gha-delegator-v1-tag.intoto.json",
+			params:  map[string]any{"expected_tag": "v13.0.30"},
+			want:    map[string]slsa.Status{"github-source-tag": slsa.StatusPass},
+		},
+		{
+			name:    "v1 tag build, versioned tag",
+			fixture: "gha-delegator-v1-tag.intoto.json",
+			params:  map[string]any{"expected_versioned_tag": "v13"},
+			want:    map[string]slsa.Status{"github-source-versioned-tag": slsa.StatusPass},
+		},
+		{
+			name:    "v1 tag build, branch from the push event's base_ref",
+			fixture: "gha-delegator-v1-tag.intoto.json",
+			params:  map[string]any{"expected_branch": "main"},
+			want:    map[string]slsa.Status{"github-source-branch": slsa.StatusPass},
+		},
+		{
+			name:    "v1 tag build, other branch",
+			fixture: "gha-delegator-v1-tag.intoto.json",
+			params:  map[string]any{"expected_branch": "develop"},
+			want:    map[string]slsa.Status{"github-source-branch": slsa.StatusFail},
+		},
+		// --- v0.2 generic generator, workflow_dispatch with inputs ---
+		{
+			name:    "workflow inputs all present",
+			fixture: "gha-generic-v02-workflow-dispatch.intoto.json",
+			params:  map[string]any{"expected_workflow_inputs": []string{"some_bool=true", "some_integer=123"}},
+			want:    map[string]slsa.Status{"github-workflow-inputs": slsa.StatusPass},
+		},
+		{
+			name:    "workflow input with another value",
+			fixture: "gha-generic-v02-workflow-dispatch.intoto.json",
+			params:  map[string]any{"expected_workflow_inputs": []string{"some_bool=false"}},
+			want:    map[string]slsa.Status{"github-workflow-inputs": slsa.StatusFail},
+		},
+		{
+			name:    "workflow input missing",
+			fixture: "gha-generic-v02-workflow-dispatch.intoto.json",
+			params:  map[string]any{"expected_workflow_inputs": []string{"nope=1"}},
+			want:    map[string]slsa.Status{"github-workflow-inputs": slsa.StatusFail},
+		},
+		{
+			name:    "workflow inputs on a build not triggered by workflow_dispatch",
+			fixture: "gha-go-v02-branch.intoto.json",
+			params:  map[string]any{"expected_workflow_inputs": []string{"some_bool=true"}},
+			want:    map[string]slsa.Status{"github-workflow-inputs": slsa.StatusFail},
+		},
+		// --- v1 GitHub artifact attestation, branch build ---
+		{
+			name:    "github attestation, branch",
+			fixture: "github-attestation-v1-branch.intoto.json",
+			params:  map[string]any{"expected_branch": "publish-to-bcr"},
+			want:    map[string]slsa.Status{"github-source-branch": slsa.StatusPass},
+		},
+		{
+			name:    "github attestation, tag expectation on a branch build",
+			fixture: "github-attestation-v1-branch.intoto.json",
+			params:  map[string]any{"expected_tag": "v1"},
+			want:    map[string]slsa.Status{"github-source-tag": slsa.StatusFail},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			stmt := loadFixture(t, tc.fixture)
+			opts := make([]slsa.VerificationOption, 0, 2+len(tc.params))
+			// The core layer needs these; the buildType layer is what we assert.
+			opts = append(opts,
+				slsa.WithParam("expected_source", "unused"),
+				slsa.WithParam("trusted_builders", []string{"unused"}),
+			)
+			for k, val := range tc.params {
+				opts = append(opts, slsa.WithParam(k, val))
+			}
+			res, err := v.Verify(context.Background(), stmt, opts...)
+			require.NoError(t, err)
+			for id, want := range tc.want {
+				cr := buildTypeResult(t, res, id)
+				assert.Equal(t, want, cr.Status, "%s: %s", id, cr.Message)
+			}
+		})
+	}
+}
+
+// A generator provenance verified with no expectation stated is refused,
+// naming every expectation the catalog can check for it.
+func TestGitHubBuildTypeControlsRequireAnExpectation(t *testing.T) {
+	t.Parallel()
+	v, err := slsa.New()
+	require.NoError(t, err)
+	_, err = v.Verify(context.Background(), loadFixture(t, "gha-go-v02-branch.intoto.json"),
+		slsa.WithParam("expected_source", "unused"), slsa.WithParam("trusted_builders", []string{"unused"}))
+	require.ErrorIs(t, err, slsa.ErrBuildTypeParamsUnset)
+	for _, p := range []string{"expected_branch", "expected_tag", "expected_versioned_tag", "expected_workflow_inputs"} {
+		assert.Contains(t, err.Error(), p)
+	}
 }
