@@ -254,9 +254,16 @@ func newSigningKey(t *testing.T, dir, name string) signingKey {
 // that claims verifierID, signed by k.
 func signVSA(t *testing.T, dir, name, verifierID string, k signingKey) string {
 	t.Helper()
+	return signVSAFor(t, dir, name, verifierID, k, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+}
+
+// signVSAFor is signVSA with the VSA subject's sha256 digest chosen by
+// the caller.
+func signVSAFor(t *testing.T, dir, name, verifierID string, k signingKey, subjectSHA256 string) string {
+	t.Helper()
 	statement := map[string]any{
 		"_type":         "https://in-toto.io/Statement/v1",
-		"subject":       []map[string]any{{"name": "x", "digest": map[string]string{"sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}}},
+		"subject":       []map[string]any{{"name": "x", "digest": map[string]string{"sha256": subjectSHA256}}},
 		"predicateType": "https://slsa.dev/verification_summary/v1",
 		"predicate": map[string]any{
 			"verifier": map[string]string{"id": verifierID}, "timeVerified": "2026-01-01T00:00:00Z",
@@ -353,6 +360,53 @@ func TestRunVSAVerifierBinding(t *testing.T) {
 			out, err := runVSAWith(t, opts)
 			if tc.wantOutput != "" {
 				assert.Contains(t, out, tc.wantOutput)
+			}
+			if tc.wantPass {
+				require.NoError(t, err)
+				assert.Contains(t, out, "PASS")
+				return
+			}
+			require.ErrorIs(t, err, ErrVerifyFailed)
+			assert.Contains(t, out, "FAIL")
+		})
+	}
+}
+
+// The vsa command binds the VSA to the artifacts the user holds.
+func TestRunVSASubjects(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	k := newSigningKey(t, dir, "k")
+	artifact := filepath.Join(dir, "image.tar")
+	require.NoError(t, os.WriteFile(artifact, []byte("layers"), 0o600))
+	vsaPath := signVSAFor(t, dir, "bound", "https://a.example.com", k, fileSHA256(t, artifact))
+	other := filepath.Join(dir, "other.tar")
+	require.NoError(t, os.WriteFile(other, []byte("not it"), 0o600))
+
+	for _, tc := range []struct {
+		name       string
+		artifacts  []string
+		subjects   []string
+		wantPass   bool
+		wantOutput []string
+	}{
+		{name: "no subjects", wantPass: true},
+		{name: "held artifact", artifacts: []string{artifact}, wantPass: true, wantOutput: []string{"Subjects:", "[PASS]", "image.tar"}},
+		{name: "stated digest", subjects: []string{"sha256:" + fileSHA256(t, artifact)}, wantPass: true, wantOutput: []string{"[PASS]"}},
+		{name: "other artifact fails", artifacts: []string{artifact, other}, wantPass: false, wantOutput: []string{"[PASS]", "[FAIL]", "other.tar"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			opts, err := newVSAOptions(t, vsaPath, func(o *vsaOptions) {
+				o.VerifierSpecs = []string{"https://a.example.com=" + k.spec}
+				o.shared.PublicKeyPaths = []string{k.pemPath}
+				o.ArtifactPaths = tc.artifacts
+				o.SubjectSpecs = tc.subjects
+			})
+			require.NoError(t, err)
+			out, err := runVSAWith(t, opts)
+			for _, want := range tc.wantOutput {
+				assert.Contains(t, out, want)
 			}
 			if tc.wantPass {
 				require.NoError(t, err)

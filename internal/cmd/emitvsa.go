@@ -14,6 +14,7 @@ import (
 	"github.com/carabiner-labs/slsa-verifier/pkg/slsa"
 	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/controls"
 	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/vsa"
+	"github.com/carabiner-labs/slsa-verifier/pkg/subject"
 )
 
 // emitVSA writes an unsigned VSA v1 statement describing result to w. The
@@ -23,6 +24,11 @@ import (
 // for the build and source verifiers when their --vsa flag is set.
 func emitVSA(w io.Writer, stmt cdattestation.Statement, result *slsa.Result, track controls.Track) error {
 	subjects := vsaSubjects(stmt)
+	// When the run was bound to specific artifacts, the summary is
+	// about those: the attestation subjects they matched.
+	if len(result.Subjects) > 0 {
+		subjects = matchedSubjects(result.Subjects)
+	}
 	// Prefer the identity carried on the result (set through
 	// WithVerifierID) or fall back to this tool's own ID when
 	// a caller ran the verification without supplying one.
@@ -82,6 +88,26 @@ func verifiedLevels(track controls.Track, result *slsa.Result) []string {
 		prefix = "SLSA_SOURCE_LEVEL_"
 	}
 	return []string{fmt.Sprintf("%s%d", prefix, level)}
+}
+
+// matchedSubjects projects the attestation subjects the expected
+// artifacts matched onto the VSA subject type, de-duplicated and in
+// order of first match.
+func matchedSubjects(matches []subject.Match) []*intoto.ResourceDescriptor {
+	out := []*intoto.ResourceDescriptor{}
+	seen := map[cdattestation.Subject]bool{}
+	for _, m := range matches {
+		if !m.Matched || m.Subject == nil || seen[m.Subject] {
+			continue
+		}
+		seen[m.Subject] = true
+		out = append(out, &intoto.ResourceDescriptor{
+			Name:   m.Subject.GetName(),
+			Uri:    m.Subject.GetUri(),
+			Digest: m.Subject.GetDigest(),
+		})
+	}
+	return out
 }
 
 // vsaSubjects projects the verified statement's subjects onto the

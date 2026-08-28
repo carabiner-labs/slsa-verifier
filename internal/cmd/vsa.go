@@ -27,6 +27,7 @@ import (
 type vsaOptions struct {
 	shared *sharedOptions
 	signingOptions
+	subjectOptions
 
 	// VerifierSpecs holds the raw --verifier values, "id" or "id=spec".
 	VerifierSpecs []string
@@ -42,13 +43,16 @@ type vsaOptions struct {
 	Policy       string
 	Dependencies []string
 
-	// AttestationPath is the positional argument: path to the VSA
+	// AttestationPath is the first positional argument: path to the VSA
 	// envelope file (plain in-toto statement, DSSE, or Sigstore bundle).
+	// Any further positional arguments are artifact files the VSA must
+	// be about (see subjectOptions).
 	AttestationPath string
 }
 
 func (o *vsaOptions) AddFlags(cmd *cobra.Command) {
 	o.signingOptions.AddFlags(cmd)
+	o.subjectOptions.AddFlags(cmd)
 	cmd.PersistentFlags().StringArrayVar(
 		&o.VerifierSpecs, "verifier", nil,
 		"accepted verifier.id, optionally bound to a signer as id=<signer spec> "+
@@ -114,7 +118,7 @@ func parseVerifierBindings(specs []string) ([]attestation.VerifierBinding, error
 }
 
 func (o *vsaOptions) Validate() error {
-	errs := []error{o.shared.Validate(), o.signingOptions.Validate()}
+	errs := []error{o.shared.Validate(), o.signingOptions.Validate(), o.subjectOptions.Validate()}
 
 	bindings, err := parseVerifierBindings(o.VerifierSpecs)
 	if err != nil {
@@ -192,8 +196,13 @@ version-neutral representation and the following checks run:
     --level SLSA_BUILD_LEVEL_3 is satisfied by SLSA_BUILD_LEVEL_3 or SLSA_BUILD_LEVEL_4)
   * resourceUri must equal --resource (if set)
   * policy.uri must equal --policy (if set)
-  * dependencyLevels must contain every --dependency key (if any given)`,
-		Use: "vsa <attestation-path>",
+  * dependencyLevels must contain every --dependency key (if any given)
+
+Artifact files given after the attestation are hashed with the digest
+algorithms the VSA's subjects use, and --subject states a digest
+directly; the VSA must be about every one of them or the verification
+fails. Without any, the VSA is verified on its content alone.`,
+		Use: "vsa <attestation-path> [artifact...]",
 		Example: fmt.Sprintf(`  # Accept VSAs from one verifier, bound to the Sigstore identity that issues them
   %[1]s vsa --level SLSA_BUILD_LEVEL_3 \
     --verifier 'https://verify.example.com=sigstore::https://token.actions.githubusercontent.com::https://github.com/org/verifier/.github/workflows/verify.yaml@refs/heads/main' \
@@ -216,9 +225,10 @@ version-neutral representation and the following checks run:
 		),
 		SilenceUsage:  false,
 		SilenceErrors: true,
-		Args:          cobra.ExactArgs(1),
+		Args:          cobra.MinimumNArgs(1),
 		PreRunE: func(_ *cobra.Command, args []string) error {
 			opts.AttestationPath = args[0]
+			opts.ArtifactPaths = args[1:]
 			return nil
 		},
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -262,7 +272,13 @@ func runVSA(cmd *cobra.Command, opts *vsaOptions) error {
 		return err
 	}
 
-	result, err := v.VerifyVSA(cmd.Context(), env, opts.toLibOptions())
+	expected, err := opts.resolve(env.GetStatement())
+	if err != nil {
+		return err
+	}
+	libOpts := opts.toLibOptions()
+	libOpts.Subjects = expected
+	result, err := v.VerifyVSA(cmd.Context(), env, libOpts)
 	if err != nil {
 		return err
 	}
@@ -323,6 +339,8 @@ func printVSAResult(w io.Writer, result *attestation.VSAResult) {
 	}
 	flushTabWriter(tw)
 	writef(w, "\n")
+
+	printSubjects(w, result.Subjects)
 
 	writef(w, "Checks:\n")
 	ct := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)

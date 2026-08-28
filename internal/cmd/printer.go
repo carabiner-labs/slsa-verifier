@@ -10,9 +10,11 @@ import (
 	"strings"
 	"text/tabwriter"
 
+	"github.com/carabiner-dev/attestation"
 	"github.com/fatih/color"
 
 	"github.com/carabiner-labs/slsa-verifier/pkg/slsa"
+	"github.com/carabiner-labs/slsa-verifier/pkg/subject"
 )
 
 // printResult writes the full verification roster: a top-line PASS/FAIL +
@@ -38,6 +40,7 @@ func printResult(w io.Writer, result *slsa.Result, verbose bool) {
 	}
 	writef(w, "\n")
 
+	printSubjects(w, result.Subjects)
 	printLayer(w, "Core", result.CoreResults, verbose)
 	// A nil buildType slice means the layer was not evaluated at all
 	// (e.g. the source track, which has no buildType concept): omit the
@@ -46,6 +49,75 @@ func printResult(w io.Writer, result *slsa.Result, verbose bool) {
 		printLayer(w, "BuildType", result.BuildTypeResults, verbose)
 	}
 	printLayer(w, "User", result.UserResults, verbose)
+}
+
+// printSubjects renders the outcome of binding the attestation to the
+// artifacts the user holds: one line per expected subject, with the
+// attestation subject it matched or the reason it did not. Nothing is
+// printed when no subjects were expected.
+func printSubjects(w io.Writer, matches []subject.Match) {
+	if len(matches) == 0 {
+		return
+	}
+	writef(w, "Subjects:\n")
+	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+	for _, m := range matches {
+		line := fmt.Sprintf("  %s\t%s", vsaCheckMarker(m.Matched), subjectColumns(m.Expected))
+		switch {
+		case m.Matched:
+			if name := subjectLabel(m.Subject); name != "" {
+				line += "\t" + dimf("matches "+name)
+			}
+		default:
+			line += "\t" + dimf(m.Message)
+		}
+		writef(tw, "%s\n", line)
+	}
+	flushTabWriter(tw)
+	writef(w, "\n")
+}
+
+// subjectColumns renders an expected subject as name and abbreviated
+// digest. A subject given as algorithm:digest has no name beyond the
+// digest itself, so it is shown once, abbreviated.
+func subjectColumns(e *subject.Expected) string {
+	if e == nil {
+		return ""
+	}
+	digest := shortDigest(e)
+	if e.Name == "" || strings.HasPrefix(digest, e.Name[:min(len(e.Name), 20)]) {
+		return digest
+	}
+	return e.Name + "\t" + dimf(digest)
+}
+
+// shortDigest renders an expected subject's first digest, abbreviated,
+// so the line says what was compared without spilling 64 hex characters.
+func shortDigest(e *subject.Expected) string {
+	if e == nil || len(e.Digests) == 0 {
+		return ""
+	}
+	algos := make([]string, 0, len(e.Digests))
+	for algo := range e.Digests {
+		algos = append(algos, algo)
+	}
+	sort.Strings(algos)
+	digest := e.Digests[algos[0]]
+	if len(digest) > 16 {
+		digest = digest[:16] + "…"
+	}
+	return algos[0] + ":" + digest
+}
+
+// subjectLabel names an attestation subject by its name or URI.
+func subjectLabel(s attestation.Subject) string {
+	if s == nil {
+		return ""
+	}
+	if s.GetName() != "" {
+		return s.GetName()
+	}
+	return s.GetUri()
 }
 
 // printLayer renders one layer's roster as an aligned table. Within a

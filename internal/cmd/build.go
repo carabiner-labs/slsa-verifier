@@ -26,9 +26,12 @@ type buildOptions struct {
 	signingOptions
 	controlsOptions
 	vsaOutputOptions
+	subjectOptions
 
-	// AttestationPath is the positional argument: path to the attestation
-	// file (plain in-toto statement, DSSE envelope, or Sigstore bundle).
+	// AttestationPath is the first positional argument: path to the
+	// attestation file (plain in-toto statement, DSSE envelope, or
+	// Sigstore bundle). Any further positional arguments are artifact
+	// files the attestation must be about (see subjectOptions).
 	AttestationPath string
 
 	// Spec is the SLSA spec version whose criteria the attestation is
@@ -45,6 +48,7 @@ func (o *buildOptions) AddFlags(cmd *cobra.Command) {
 	o.signingOptions.AddFlags(cmd)
 	o.controlsOptions.AddFlags(cmd)
 	o.vsaOutputOptions.AddFlags(cmd)
+	o.subjectOptions.AddFlags(cmd)
 	cmd.PersistentFlags().StringVar(
 		&o.Spec, "spec", "",
 		"SLSA spec version to verify against (eg 1.2) defaults to latest",
@@ -63,6 +67,7 @@ func (o *buildOptions) Validate() error {
 		o.signingOptions.Validate(),
 		o.controlsOptions.Validate(),
 		o.vsaOutputOptions.Validate(),
+		o.subjectOptions.Validate(),
 	}
 	if o.AttestationPath == "" {
 		errs = append(errs, errors.New("attestation path is required"))
@@ -94,17 +99,23 @@ sigstore::<issuer>::<identity>, matched exactly, or
 sigstore(identityMatch=regex)::<issuer>::<identity-regexp>:
 
   sigstore::https://accounts.google.com::user@example.com
-  sigstore(identityMatch=regex)::https://token.actions.githubusercontent.com::.*@example/.*`,
-		Use: "build <attestation-path>",
+  sigstore(identityMatch=regex)::https://token.actions.githubusercontent.com::.*@example/.*
+
+Artifact files given after the attestation are hashed with the digest
+algorithms its subjects use, and --subject states a digest directly;
+the attestation must be about every one of them or the verification
+fails. Without any, the attestation is verified on its content alone.`,
+		Use: "build <attestation-path> [artifact...]",
 		Example: fmt.Sprintf(
 			`%s build --param=expected_source:git+https://example.com/repo provenance.intoto.json`,
 			appname,
 		),
 		SilenceUsage:  false,
 		SilenceErrors: true,
-		Args:          cobra.ExactArgs(1),
+		Args:          cobra.MinimumNArgs(1),
 		PreRunE: func(_ *cobra.Command, args []string) error {
 			opts.AttestationPath = args[0]
+			opts.ArtifactPaths = args[1:]
 			return nil
 		},
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -153,6 +164,13 @@ func runBuild(cmd *cobra.Command, opts *buildOptions) error {
 		return errors.New("envelope produced no statement")
 	}
 
+	// Artifacts are hashed with the digest algorithms the attestation's
+	// subjects use, so the comparison is on the attestation's terms.
+	expected, err := opts.resolve(stmt)
+	if err != nil {
+		return err
+	}
+
 	v, err := slsa.New()
 	if err != nil {
 		return fmt.Errorf("building verifier: %w", err)
@@ -161,6 +179,7 @@ func runBuild(cmd *cobra.Command, opts *buildOptions) error {
 	result, err := v.Verify(
 		cmd.Context(),
 		stmt,
+		slsa.WithSubjects(expected),
 		slsa.WithParams(opts.shared.Params),
 		slsa.WithRequireSignatures(opts.shared.RequireSignatures),
 		slsa.WithExpectedSigners(opts.Signers),
