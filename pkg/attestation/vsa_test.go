@@ -5,9 +5,11 @@ package attestation
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	cdattestation "github.com/carabiner-dev/attestation"
+	sapi "github.com/carabiner-dev/signer/api/v1"
 	vsav1 "github.com/in-toto/attestation/go/predicates/vsa/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -89,7 +91,7 @@ func TestVerifyVSAAllChecksPass(t *testing.T) {
 
 	v := New()
 	result, err := v.VerifyVSA(context.Background(), vsaEnv(nil), &VSAOptions{
-		Verifier:     "https://verify.example.com",
+		Verifiers: []VerifierBinding{{ID: "https://verify.example.com"}}, AllowUnbound: true,
 		Levels:       []string{"SLSA_BUILD_LEVEL_3"},
 		Resource:     "pkg:oci/foo@sha256:abc",
 		Dependencies: []string{"SLSA_BUILD_LEVEL_2"},
@@ -108,7 +110,7 @@ func TestVerifyVSAResultMustBePassed(t *testing.T) {
 		p.VerificationResult = vsa.ResultFailed
 	})
 	result, err := New().VerifyVSA(context.Background(), env, &VSAOptions{
-		Verifier: "https://verify.example.com",
+		Verifiers: []VerifierBinding{{ID: "https://verify.example.com"}}, AllowUnbound: true,
 	})
 	require.NoError(t, err)
 	assert.False(t, result.Pass())
@@ -127,7 +129,7 @@ func TestVerifyVSAVerifierMismatchFails(t *testing.T) {
 	t.Parallel()
 
 	result, err := New().VerifyVSA(context.Background(), vsaEnv(nil), &VSAOptions{
-		Verifier: "https://other.example.com",
+		Verifiers: []VerifierBinding{{ID: "https://other.example.com"}}, AllowUnbound: true,
 	})
 	require.NoError(t, err)
 	assert.False(t, result.Pass())
@@ -141,8 +143,8 @@ func TestVerifyVSALevelOrMatched(t *testing.T) {
 	// here (the second is the actual level, the first is below it
 	// and is satisfied by at-or-above semantics).
 	result, err := New().VerifyVSA(context.Background(), vsaEnv(nil), &VSAOptions{
-		Verifier: "https://verify.example.com",
-		Levels:   []string{"SLSA_BUILD_LEVEL_4", "SLSA_BUILD_LEVEL_3"},
+		Verifiers: []VerifierBinding{{ID: "https://verify.example.com"}}, AllowUnbound: true,
+		Levels: []string{"SLSA_BUILD_LEVEL_4", "SLSA_BUILD_LEVEL_3"},
 	})
 	require.NoError(t, err)
 	assert.True(t, result.Pass())
@@ -156,8 +158,8 @@ func TestVerifyVSALevelAtOrAboveSatisfies(t *testing.T) {
 		p.VerifiedLevels = []string{"SLSA_BUILD_LEVEL_4"}
 	})
 	result, err := New().VerifyVSA(context.Background(), env, &VSAOptions{
-		Verifier: "https://verify.example.com",
-		Levels:   []string{"SLSA_BUILD_LEVEL_3"},
+		Verifiers: []VerifierBinding{{ID: "https://verify.example.com"}}, AllowUnbound: true,
+		Levels: []string{"SLSA_BUILD_LEVEL_3"},
 	})
 	require.NoError(t, err)
 	assert.True(t, result.Pass(),
@@ -169,8 +171,8 @@ func TestVerifyVSALevelBelowWantFails(t *testing.T) {
 
 	// fixture has SLSA_BUILD_LEVEL_3, want LEVEL_4 → fails (3 < 4).
 	result, err := New().VerifyVSA(context.Background(), vsaEnv(nil), &VSAOptions{
-		Verifier: "https://verify.example.com",
-		Levels:   []string{"SLSA_BUILD_LEVEL_4"},
+		Verifiers: []VerifierBinding{{ID: "https://verify.example.com"}}, AllowUnbound: true,
+		Levels: []string{"SLSA_BUILD_LEVEL_4"},
 	})
 	require.NoError(t, err)
 	assert.False(t, result.Pass())
@@ -185,8 +187,8 @@ func TestVerifyVSALevelDifferentTrackFails(t *testing.T) {
 		p.VerifiedLevels = []string{"SLSA_BUILD_LEVEL_4"}
 	})
 	result, err := New().VerifyVSA(context.Background(), env, &VSAOptions{
-		Verifier: "https://verify.example.com",
-		Levels:   []string{"SLSA_SOURCE_LEVEL_3"},
+		Verifiers: []VerifierBinding{{ID: "https://verify.example.com"}}, AllowUnbound: true,
+		Levels: []string{"SLSA_SOURCE_LEVEL_3"},
 	})
 	require.NoError(t, err)
 	assert.False(t, result.Pass(),
@@ -201,7 +203,7 @@ func TestVerifyVSADependenciesAndMatched(t *testing.T) {
 		p.DependencyLevels = map[string]uint64{"SLSA_BUILD_LEVEL_2": 1}
 	})
 	result, err := New().VerifyVSA(context.Background(), env, &VSAOptions{
-		Verifier:     "https://verify.example.com",
+		Verifiers: []VerifierBinding{{ID: "https://verify.example.com"}}, AllowUnbound: true,
 		Dependencies: []string{"SLSA_BUILD_LEVEL_2", "SLSA_BUILD_LEVEL_3"},
 	})
 	require.NoError(t, err)
@@ -214,14 +216,14 @@ func TestVerifyVSAVerifierRequiredOnOptions(t *testing.T) {
 
 	_, err := New().VerifyVSA(context.Background(), vsaEnv(nil), &VSAOptions{})
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "Verifier is required")
+	assert.Contains(t, err.Error(), "at least one verifier")
 }
 
 func TestVerifyVSANilEnvelope(t *testing.T) {
 	t.Parallel()
 
 	_, err := New().VerifyVSA(context.Background(), nil, &VSAOptions{
-		Verifier: "https://verify.example.com",
+		Verifiers: []VerifierBinding{{ID: "https://verify.example.com"}}, AllowUnbound: true,
 	})
 	require.Error(t, err)
 }
@@ -236,8 +238,188 @@ func TestVerifyVSANonVSAPredicateReturnsErrNotVSA(t *testing.T) {
 		},
 	}
 	_, err := New().VerifyVSA(context.Background(), env, &VSAOptions{
-		Verifier: "https://verify.example.com",
+		Verifiers: []VerifierBinding{{ID: "https://verify.example.com"}}, AllowUnbound: true,
 	})
 	require.Error(t, err)
 	assert.ErrorIs(t, err, vsa.ErrNotVSA, "expected ErrNotVSA, got %v", err)
+}
+
+// --- verifier/signer binding -------------------------------------------
+
+// keyID builds an expected identity for a key id, and signedBy an
+// envelope carrying a verified signature recorded for that key id.
+func keyID(id string) *sapi.Identity {
+	return &sapi.Identity{Key: &sapi.IdentityKey{Id: id}}
+}
+
+func signedBy(env *fakeEnvelope, keyIDs ...string) *verifiedEnv {
+	ids := make([]*sapi.Identity, 0, len(keyIDs))
+	for _, id := range keyIDs {
+		ids = append(ids, keyID(id))
+	}
+	return &verifiedEnv{fakeEnvelope: env, ver: &sapi.Verification{Signature: &sapi.SignatureVerification{
+		Status: sapi.VerificationStatus_VERIFIED, Verified: true, Identities: ids,
+	}}}
+}
+
+// claimedBy is a VSA envelope whose predicate claims the given verifier.
+func claimedBy(verifier string) *fakeEnvelope {
+	return vsaEnv(func(v *vsav1.VerificationSummary) { v.Verifier.Id = verifier })
+}
+
+func checkNamed(t *testing.T, r *VSAResult, prefix string) *VSACheck {
+	t.Helper()
+	for i := range r.Checks {
+		if strings.HasPrefix(r.Checks[i].Name, prefix) {
+			return &r.Checks[i]
+		}
+	}
+	return nil
+}
+
+func TestVerifyVSAUnboundVerifierIsRejectedByDefault(t *testing.T) {
+	t.Parallel()
+
+	_, err := New().VerifyVSA(context.Background(), vsaEnv(nil), &VSAOptions{
+		Verifiers: []VerifierBinding{{ID: "https://verify.example.com"}},
+	})
+	require.ErrorIs(t, err, ErrVerifierUnbound)
+	assert.Contains(t, err.Error(), "https://verify.example.com")
+
+	// Naming one bound and one unbound verifier is still an error, and
+	// the message names the unbound one.
+	_, err = New().VerifyVSA(context.Background(), vsaEnv(nil), &VSAOptions{
+		Verifiers: []VerifierBinding{
+			{ID: "https://bound.example.com", Signers: []*sapi.Identity{keyID("k")}},
+			{ID: "https://loose.example.com"},
+		},
+	})
+	require.ErrorIs(t, err, ErrVerifierUnbound)
+	assert.Contains(t, err.Error(), "https://loose.example.com")
+	assert.NotContains(t, err.Error(), "https://bound.example.com")
+
+	// A wildcard signer binds every verifier.
+	r, err := New().VerifyVSA(context.Background(), signedBy(vsaEnv(nil), "k"), &VSAOptions{
+		Verifiers: []VerifierBinding{{ID: "https://verify.example.com"}},
+		Signers:   []*sapi.Identity{keyID("k")},
+	})
+	require.NoError(t, err)
+	assert.True(t, r.Pass())
+}
+
+func TestVerifyVSASignerBinding(t *testing.T) {
+	t.Parallel()
+
+	const verifierA, verifierB = "https://a.example.com", "https://b.example.com"
+	bound := func() *VSAOptions {
+		return &VSAOptions{
+			Verifiers: []VerifierBinding{
+				{ID: verifierA, Signers: []*sapi.Identity{keyID("key-a")}},
+				{ID: verifierB, Signers: []*sapi.Identity{keyID("key-b")}},
+			},
+			Levels: []string{"SLSA_BUILD_LEVEL_3"},
+		}
+	}
+
+	for _, tc := range []struct {
+		name        string
+		env         Envelope
+		opts        *VSAOptions
+		wantPass    bool
+		wantSigner  bool   // the signer check must appear
+		wantMessage string // substring of the signer check's failure message
+	}{
+		{
+			name: "A signed by A's signer",
+			env:  signedBy(claimedBy(verifierA), "key-a"), opts: bound(),
+			wantPass: true, wantSigner: true,
+		},
+		{
+			name: "B signed by B's signer",
+			env:  signedBy(claimedBy(verifierB), "key-b"), opts: bound(),
+			wantPass: true, wantSigner: true,
+		},
+		{
+			// The case the binding exists for: a signer trusted for A
+			// cannot vouch as B.
+			name: "B signed by A's signer",
+			env:  signedBy(claimedBy(verifierB), "key-a"), opts: bound(),
+			wantPass: false, wantSigner: true, wantMessage: "not authorized for this verifier",
+		},
+		{
+			name:     "wildcard signer vouches for either",
+			env:      signedBy(claimedBy(verifierB), "key-x"),
+			opts:     func() *VSAOptions { o := bound(); o.Signers = []*sapi.Identity{keyID("key-x")}; return o }(),
+			wantPass: true, wantSigner: true,
+		},
+		{
+			name:     "a verifier's own signer adds to the wildcard, not replaces it",
+			env:      signedBy(claimedBy(verifierA), "key-a"),
+			opts:     func() *VSAOptions { o := bound(); o.Signers = []*sapi.Identity{keyID("key-x")}; return o }(),
+			wantPass: true, wantSigner: true,
+		},
+		{
+			name: "bound verifier, unsigned envelope",
+			env:  claimedBy(verifierA), opts: bound(),
+			wantPass: false, wantSigner: true, wantMessage: "no verified signature",
+		},
+		{
+			name: "bound verifier, signature recorded but not verified",
+			env: &verifiedEnv{fakeEnvelope: claimedBy(verifierA), ver: &sapi.Verification{Signature: &sapi.SignatureVerification{
+				Status: sapi.VerificationStatus_FAILED, Identities: nil,
+			}}},
+			opts:     bound(),
+			wantPass: false, wantSigner: true, wantMessage: "no verified signature",
+		},
+		{
+			// An unaccepted verifier fails the verifier check; there is
+			// no binding to check the signer against.
+			name: "claimed verifier is not accepted",
+			env:  signedBy(claimedBy("https://nobody.example.com"), "key-a"), opts: bound(),
+			wantPass: false, wantSigner: false,
+		},
+		{
+			// Unbound and allowed: only the id is matched, no signer row.
+			name:     "unbound verifier allowed explicitly",
+			env:      claimedBy(verifierA),
+			opts:     &VSAOptions{Verifiers: []VerifierBinding{{ID: verifierA}}, AllowUnbound: true},
+			wantPass: true, wantSigner: false,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			r, err := New().VerifyVSA(context.Background(), tc.env, tc.opts)
+			require.NoError(t, err)
+			assert.Equal(t, tc.wantPass, r.Pass(), "checks: %+v", r.Checks)
+
+			signer := checkNamed(t, r, "Signer is authorized for verifier")
+			if !tc.wantSigner {
+				assert.Nil(t, signer, "no signer check expected")
+				return
+			}
+			require.NotNil(t, signer, "signer check expected")
+			assert.Equal(t, tc.wantPass, signer.Pass)
+			if tc.wantMessage != "" {
+				assert.Contains(t, signer.Message, tc.wantMessage)
+			}
+		})
+	}
+}
+
+// The verifier check names every accepted verifier and matches any.
+func TestVerifyVSAVerifierOrMatched(t *testing.T) {
+	t.Parallel()
+
+	opts := &VSAOptions{
+		Verifiers:    []VerifierBinding{{ID: "https://a.example.com"}, {ID: "https://verify.example.com"}},
+		AllowUnbound: true,
+	}
+	r, err := New().VerifyVSA(context.Background(), vsaEnv(nil), opts)
+	require.NoError(t, err)
+	assert.True(t, r.Pass())
+	verifier := checkNamed(t, r, "Verifier is one of")
+	require.NotNil(t, verifier)
+	assert.Contains(t, verifier.Name, "https://a.example.com")
+	assert.Contains(t, verifier.Name, "https://verify.example.com")
 }

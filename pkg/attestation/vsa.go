@@ -7,17 +7,48 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
+
+	sapi "github.com/carabiner-dev/signer/api/v1"
 
 	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/vsa"
 )
+
+// ErrVerifierUnbound is returned by VerifyVSA when an accepted verifier
+// has no authorized signer — neither its own nor a wildcard — and
+// VSAOptions.AllowUnbound is false. A VSA's verifier.id is a claim
+// written by whoever produced the document; without a signer bound to
+// it, matching the id proves nothing about who issued the VSA.
+var ErrVerifierUnbound = errors.New("verifier has no authorized signer")
+
+// VerifierBinding names an accepted verifier and the signer identities
+// authorized to issue VSAs on its behalf.
+type VerifierBinding struct {
+	// ID is matched exactly against VSA.Verifier.ID.
+	ID string
+
+	// Signers are identities allowed to sign VSAs from this verifier,
+	// on top of any wildcard signers in VSAOptions.Signers. A verifier
+	// with neither is unbound: see VSAOptions.AllowUnbound.
+	Signers []*sapi.Identity
+}
 
 // VSAOptions configures the hardcoded checks VerifyVSA runs against
 // an attestation's normalized VSA representation.
 //
 // Field semantics:
-//   - Verifier is matched exactly against VSA.Verifier.ID. Required;
-//     a VSA with no asserted verifier identity carries very weak
-//     trust value, so VerifyVSA returns an error if it is empty.
+//   - Verifiers lists the accepted verifiers, OR-matched on ID against
+//     VSA.Verifier.ID. At least one is required; a VSA with no
+//     asserted verifier identity carries very weak trust value.
+//   - Signers are wildcard identities authorized to sign for every
+//     accepted verifier. A verifier's own Signers add to them.
+//   - The signer check binds the matched verifier to who actually
+//     signed the envelope: the envelope's verified signature must
+//     match one of the identities authorized for that verifier. It
+//     runs whenever the matched verifier has any authorized signer.
+//   - AllowUnbound permits verifiers with no authorized signer at all,
+//     in which case only the ID is matched. Off by default, VerifyVSA
+//     returns ErrVerifierUnbound instead.
 //   - Levels is OR-matched against VSA.VerifiedLevels — at least one
 //     listed level must be satisfied. For canonical SLSA level
 //     strings (e.g. SLSA_BUILD_LEVEL_3) the match is "at-or-above":
@@ -30,11 +61,51 @@ import (
 //     VSA.DependencyLevels (count values are not consulted).
 //     Skipped when empty.
 type VSAOptions struct {
-	Verifier     string
+	Verifiers    []VerifierBinding
+	Signers      []*sapi.Identity
+	AllowUnbound bool
 	Levels       []string
 	Resource     string
 	Policy       string
 	Dependencies []string
+}
+
+// binding returns the accepted verifier matching id, if any.
+func (o *VSAOptions) binding(id string) (VerifierBinding, bool) {
+	for _, b := range o.Verifiers {
+		if b.ID == id {
+			return b, true
+		}
+	}
+	return VerifierBinding{}, false
+}
+
+// authorizedSigners returns the identities allowed to sign for b: its
+// own plus the wildcard set.
+func (o *VSAOptions) authorizedSigners(b VerifierBinding) []*sapi.Identity {
+	ids := make([]*sapi.Identity, 0, len(b.Signers)+len(o.Signers))
+	ids = append(ids, b.Signers...)
+	return append(ids, o.Signers...)
+}
+
+// validate checks the options are usable before any parsing happens.
+func (o *VSAOptions) validate() error {
+	if len(o.Verifiers) == 0 {
+		return errors.New("VSAOptions.Verifiers must name at least one verifier")
+	}
+	var unbound []string
+	for _, b := range o.Verifiers {
+		if b.ID == "" {
+			return errors.New("VSAOptions.Verifiers contains a verifier with an empty ID")
+		}
+		if len(o.authorizedSigners(b)) == 0 {
+			unbound = append(unbound, b.ID)
+		}
+	}
+	if len(unbound) > 0 && !o.AllowUnbound {
+		return fmt.Errorf("%w: %s", ErrVerifierUnbound, strings.Join(unbound, ", "))
+	}
+	return nil
 }
 
 // VSAResult is what VerifyVSA returns. VSA is the normalized
@@ -83,10 +154,13 @@ type VSACheck struct {
 // runs the hardcoded checks selected by opts.
 //
 // Returns vsa.ErrNotVSA wrapped with the offending predicate type
-// when env carries a non-VSA predicate. Always-on checks
-// (verificationResult == PASSED and verifier identity match) always
-// appear in the result; the optional checks only appear when the
-// corresponding VSAOptions field is set.
+// when env carries a non-VSA predicate, and ErrVerifierUnbound when
+// an accepted verifier has no authorized signer and opts.AllowUnbound
+// is false. Always-on checks (verificationResult == PASSED and the
+// verifier match) always appear in the result; the signer check
+// appears when the matched verifier has authorized signers, and the
+// optional checks only when the corresponding VSAOptions field is
+// set.
 //
 // ctx is accepted for future cancellation/deadline plumbing; the
 // current check set is purely in-memory and ignores it.
@@ -97,8 +171,8 @@ func (*Verifier) VerifyVSA(_ context.Context, env Envelope, opts *VSAOptions) (*
 	if opts == nil {
 		return nil, errors.New("nil VSAOptions")
 	}
-	if opts.Verifier == "" {
-		return nil, errors.New("VSAOptions.Verifier is required")
+	if err := opts.validate(); err != nil {
+		return nil, err
 	}
 
 	stmt := env.GetStatement()
@@ -115,7 +189,14 @@ func (*Verifier) VerifyVSA(_ context.Context, env Envelope, opts *VSAOptions) (*
 
 	checks := []VSACheck{
 		checkVSAResult(v),
-		checkVSAVerifier(v, opts.Verifier),
+		checkVSAVerifier(v, opts.Verifiers),
+	}
+	// Bind the verifier to who signed: only meaningful once the
+	// claimed verifier is one we accept, and only when it has signers.
+	if b, ok := opts.binding(v.Verifier.ID); ok {
+		if allowed := opts.authorizedSigners(b); len(allowed) > 0 {
+			checks = append(checks, checkVSASigner(env, b.ID, allowed))
+		}
 	}
 	if len(opts.Levels) > 0 {
 		checks = append(checks, checkVSALevels(v, opts.Levels))
@@ -146,14 +227,63 @@ func checkVSAResult(v *vsa.VSA) VSACheck {
 	return c
 }
 
-func checkVSAVerifier(v *vsa.VSA, want string) VSACheck {
-	c := VSACheck{Name: fmt.Sprintf("Verifier == %q", want)}
-	if v.Verifier.ID == want {
-		c.Pass = true
-		return c
+func checkVSAVerifier(v *vsa.VSA, accepted []VerifierBinding) VSACheck {
+	ids := make([]string, 0, len(accepted))
+	for _, b := range accepted {
+		ids = append(ids, b.ID)
+	}
+	c := VSACheck{Name: fmt.Sprintf("Verifier == %q", ids[0])}
+	if len(ids) > 1 {
+		c.Name = fmt.Sprintf("Verifier is one of %q", ids)
+	}
+	for _, id := range ids {
+		if v.Verifier.ID == id {
+			c.Pass = true
+			return c
+		}
 	}
 	c.Message = fmt.Sprintf("verifier.id = %q", v.Verifier.ID)
 	return c
+}
+
+// checkVSASigner binds the matched verifier to the envelope's signer:
+// the envelope must carry a verified signature whose identity matches
+// one of the signers authorized for that verifier.
+func checkVSASigner(env Envelope, verifierID string, allowed []*sapi.Identity) VSACheck {
+	c := VSACheck{Name: fmt.Sprintf("Signer is authorized for verifier %q", verifierID)}
+	ver := env.GetVerification()
+	if ver == nil || !ver.GetVerified() {
+		c.Message = "envelope carries no verified signature"
+		return c
+	}
+	for _, id := range allowed {
+		if id != nil && ver.MatchesIdentity(id) {
+			c.Pass = true
+			return c
+		}
+	}
+	if signers := recordedSigners(ver); len(signers) > 0 {
+		c.Message = fmt.Sprintf("signed by %q, not authorized for this verifier", signers)
+		return c
+	}
+	c.Message = "verified signature matches none of the authorized signers"
+	return c
+}
+
+// recordedSigners lists the principals of the identities an envelope's
+// verification recorded, when it exposes them.
+func recordedSigners(ver interface{ GetVerified() bool }) []string {
+	sv, ok := ver.(interface {
+		GetSignature() *sapi.SignatureVerification
+	})
+	if !ok || sv.GetSignature() == nil {
+		return nil
+	}
+	var out []string
+	for _, id := range sv.GetSignature().GetIdentities() {
+		out = append(out, id.Principal())
+	}
+	return out
 }
 
 // checkVSALevels OR-matches the VSA's verifiedLevels against want.

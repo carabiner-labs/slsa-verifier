@@ -80,7 +80,8 @@ func (o *vsaOptions) Validate() error {
 // independently of the library's public option fields.
 func (o *vsaOptions) toLibOptions() *attestation.VSAOptions {
 	return &attestation.VSAOptions{
-		Verifier:     o.Verifier,
+		Verifiers:    []attestation.VerifierBinding{{ID: o.Verifier}},
+		AllowUnbound: true, // no signer flags on this command yet
 		Levels:       o.Levels,
 		Resource:     o.Resource,
 		Policy:       o.Policy,
