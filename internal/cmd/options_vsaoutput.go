@@ -7,6 +7,13 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// defaultVerifierID is the verifier.id recorded in the VSAs this tool
+// emits unless --verifier-id says otherwise. It identifies the SLSA
+// verifier project as the entity that produced the summary; operators
+// running the tool as their own verifier name themselves instead, since
+// that is the id their consumers bind to their signing identity.
+const defaultVerifierID = "https://github.com/slsa-framework/verifier"
+
 // vsaOutputOptions is the OptionsSet shared by the verifier subcommands
 // (build and source) that can summarise their own evaluation as a SLSA
 // Verification Summary Attestation. When EmitVSA is set, the command
@@ -15,6 +22,10 @@ import (
 type vsaOutputOptions struct {
 	// EmitVSA toggles emission of an unsigned VSA to stdout (--vsa).
 	EmitVSA bool
+
+	// VerifierID is the verifier.id the emitted VSA names as its issuer
+	// (--verifier-id). Defaults to this project's URL.
+	VerifierID string
 }
 
 func (o *vsaOutputOptions) AddFlags(cmd *cobra.Command) {
@@ -23,6 +34,18 @@ func (o *vsaOutputOptions) AddFlags(cmd *cobra.Command) {
 		"emit an unsigned Verification Summary Attestation (VSA) with the "+
 			"computed SLSA level to stdout instead of the verification roster",
 	)
+	cmd.PersistentFlags().StringVar(
+		&o.VerifierID, "verifier-id", defaultVerifierID,
+		"verifier.id to record in the emitted VSA: the identity consumers "+
+			"bind to the key or certificate that signs it",
+	)
 }
 
-func (o *vsaOutputOptions) Validate() error { return nil }
+// Validate fills in the default verifier id when none was given, so
+// options built without binding the flags behave like the command.
+func (o *vsaOutputOptions) Validate() error {
+	if o.VerifierID == "" {
+		o.VerifierID = defaultVerifierID
+	}
+	return nil
+}

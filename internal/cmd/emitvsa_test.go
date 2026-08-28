@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/carabiner-dev/collector/envelope"
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -90,4 +91,38 @@ func TestEmitVSAVerifiedLevelsFollowTheVerdict(t *testing.T) {
 			assert.Equal(t, tc.wantLevels, levels)
 		})
 	}
+}
+
+// The emitted verifier.id is the identity the run was configured with,
+// falling back to the SLSA verifier project's URL.
+func TestEmitVSAVerifierID(t *testing.T) {
+	t.Parallel()
+
+	pred := emittedVSA(t, &slsa.Result{Status: slsa.StatusPass, SLSALevel: 1, VerifierID: "https://verify.example.com"}, controls.TrackSource)
+	verifier, ok := pred["verifier"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "https://verify.example.com", verifier["id"])
+
+	pred = emittedVSA(t, &slsa.Result{Status: slsa.StatusPass, SLSALevel: 1}, controls.TrackSource)
+	verifier, ok = pred["verifier"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "https://github.com/slsa-framework/verifier", verifier["id"])
+}
+
+func TestVSAOutputOptionsVerifierID(t *testing.T) {
+	t.Parallel()
+
+	// Bound to a command, the flag defaults to the SLSA verifier project URL.
+	o := &vsaOutputOptions{}
+	o.AddFlags(&cobra.Command{})
+	assert.Equal(t, defaultVerifierID, o.VerifierID)
+	require.NoError(t, o.Validate())
+
+	o.VerifierID = "https://verify.example.com"
+	require.NoError(t, o.Validate())
+
+	// Options built without the flags get the default on Validate.
+	o = &vsaOutputOptions{}
+	require.NoError(t, o.Validate())
+	assert.Equal(t, defaultVerifierID, o.VerifierID)
 }

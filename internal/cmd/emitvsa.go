@@ -16,10 +16,6 @@ import (
 	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/vsa"
 )
 
-// verifierID is the verifier.id recorded in the VSAs this tool emits. It
-// identifies slsa-verifier as the entity that produced the summary.
-const verifierID = "https://github.com/slsa-framework/verifier"
-
 // emitVSA writes an unsigned VSA v1 statement describing result to w. The
 // statement records the overall PASSED/FAILED outcome, the computed SLSA
 // level (as verifiedLevels for the given track) when the run passed, and
@@ -32,7 +28,7 @@ func emitVSA(w io.Writer, stmt cdattestation.Statement, result *slsa.Result, tra
 	// a caller ran the verification without supplying one.
 	id := result.VerifierID
 	if id == "" {
-		id = verifierID
+		id = defaultVerifierID
 	}
 	in := vsa.SummaryInput{
 		VerifierID:         id,

@@ -92,9 +92,9 @@ type VerificationOptions struct {
 
 	// VerifierID identifies the entity performing the verification. It is
 	// recorded on the Result and surfaces as verifier.id when a VSA is
-	// emitted from the outcome. The CLI sets it to the slsa-verifier
-	// project URL; consumer applications embedding the verifier should set
-	// their own identity. Empty by default.
+	// emitted from the outcome. The CLI sets it from --verifier-id,
+	// defaulting to the SLSA verifier project URL; applications embedding
+	// the verifier should set their own identity. Empty by default.
 	VerifierID string
 
 	// SpecVersion selects the SLSA spec version whose verification

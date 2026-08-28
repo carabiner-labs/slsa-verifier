@@ -317,7 +317,7 @@ func runSource(cmd *cobra.Command, opts *sourceOptions) error {
 		slsa.WithTrack(controls.TrackSource),
 		slsa.WithSpecVersion(opts.Spec),
 		slsa.WithMinLevel(opts.MinLevel),
-		slsa.WithVerifierID(verifierID),
+		slsa.WithVerifierID(opts.VerifierID),
 		// There is no buildType concept on the source track: skip the
 		// layer so it is not evaluated (or rendered) at all.
 		slsa.WithBuildTypeControls(false),

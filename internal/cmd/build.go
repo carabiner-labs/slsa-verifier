@@ -167,7 +167,7 @@ func runBuild(cmd *cobra.Command, opts *buildOptions) error {
 		slsa.WithUserControlList(opts.Controls),
 		slsa.WithTrack(controls.TrackBuild),
 		slsa.WithSpecVersion(opts.Spec),
-		slsa.WithVerifierID(verifierID),
+		slsa.WithVerifierID(opts.VerifierID),
 	)
 	// Signature/identity failures from the verification layer are a
 	// verification outcome (exit 1), not an execution failure (exit 2).
