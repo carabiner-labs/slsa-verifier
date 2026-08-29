@@ -1,0 +1,67 @@
+# SPDX-FileCopyrightText: Copyright 2026 The SLSA Authors
+# SPDX-License-Identifier: Apache-2.0
+#
+# Builders running on GitHub Actions. Their provenance is signed with a
+# Fulcio certificate issued to the workflow that ran, so the certificate's
+# subject names the builder and the ref it ran at, and its source
+# repository extension names the repository whose workflow requested it —
+# the repository the artifact was built from.
+builders:
+  - id: https://github.com/slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml
+    title: slsa-github-generator generic generator
+    description: |
+      The generic SLSA 3 provenance generator: the project's workflow
+      builds the artifacts and hands their digests to the generator,
+      which signs provenance from an isolated job. builder.id names the
+      generator at the release it ran, and so does the certificate.
+    issuer: https://token.actions.githubusercontent.com
+    ref: semver-tag
+    sourceRepositoryBound: true
+  - id: https://github.com/slsa-framework/slsa-github-generator/.github/workflows/builder_go_slsa3.yml
+    title: slsa-github-generator Go builder
+    description: |
+      The SLSA 3 Go builder: the generator compiles the Go module itself
+      and signs provenance for the binary it produced.
+    issuer: https://token.actions.githubusercontent.com
+    ref: semver-tag
+    sourceRepositoryBound: true
+  - id: https://github.com/slsa-framework/slsa-github-generator/.github/workflows/builder_container-based_slsa3.yml
+    title: slsa-github-generator container-based builder
+    description: |
+      The SLSA 3 container-based builder: the generator runs the build
+      inside the project's builder image and signs provenance for what
+      it produced.
+    issuer: https://token.actions.githubusercontent.com
+    ref: semver-tag
+    sourceRepositoryBound: true
+  - id: https://github.com/slsa-framework/slsa-github-generator/.github/workflows/delegator_generic_slsa3.yml
+    title: slsa-github-generator generic delegator
+    description: |
+      The build-your-own-builder delegator: a project's trusted reusable
+      workflow delegates provenance generation to it. The certificate
+      proves the delegator ran at a release; builder.id names the
+      delegated builder, whose trust is the caller's decision.
+    issuer: https://token.actions.githubusercontent.com
+    ref: semver-tag
+    delegated: true
+    sourceRepositoryBound: true
+  - id: https://github.com/slsa-framework/slsa-github-generator/.github/workflows/delegator_lowperms-generic_slsa3.yml
+    title: slsa-github-generator low-permissions generic delegator
+    description: |
+      The build-your-own-builder delegator for builders needing no
+      elevated permissions. Bound like the generic delegator.
+    issuer: https://token.actions.githubusercontent.com
+    ref: semver-tag
+    delegated: true
+    sourceRepositoryBound: true
+  - id: https://github.com/
+    idMatch: prefix
+    title: GitHub Actions workflow
+    description: |
+      Any workflow on GitHub Actions signing its own provenance, as
+      GitHub's artifact attestations do: builder.id is the workflow that
+      ran, at its ref, and the certificate names the same workflow. The
+      binding proves the workflow named in builder.id really ran; whether
+      to trust that workflow is the caller's decision.
+    issuer: https://token.actions.githubusercontent.com
+    sourceRepositoryBound: true
