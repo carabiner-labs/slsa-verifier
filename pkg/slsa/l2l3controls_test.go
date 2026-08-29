@@ -5,9 +5,11 @@ package slsa
 
 import (
 	"context"
+	"path/filepath"
 	"testing"
 
 	"github.com/carabiner-dev/attestation"
+	"github.com/carabiner-dev/collector/envelope"
 	provenancev1 "github.com/in-toto/attestation/go/predicates/provenance/v1"
 	intoto "github.com/in-toto/attestation/go/v1"
 	"github.com/stretchr/testify/assert"
@@ -49,6 +51,17 @@ func fullV1Stmt(t *testing.T) *fakeStmt {
 
 // findEmbedded returns the embedded core control with id, or fails the
 // test if it isn't present.
+// loadPlainFixture parses a plain in-toto fixture from testdata/plain.
+func loadPlainFixture(t *testing.T, name string) attestation.Statement {
+	t.Helper()
+	envs, err := envelope.Parsers.ParseFiles([]string{filepath.Join("testdata", "plain", name)})
+	require.NoError(t, err, "parsing fixture %s", name)
+	require.Len(t, envs, 1)
+	stmt := envs[0].GetStatement()
+	require.NotNil(t, stmt)
+	return stmt
+}
+
 func findEmbedded(t *testing.T, id string) *controls.Control {
 	t.Helper()
 	cat, err := controls.LoadEmbedded()
@@ -118,6 +131,39 @@ func TestBuilderTrustedFailsForUntrustedBuilder(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, results, 1)
 	assert.Equal(t, StatusFail, results[0].Status)
+}
+
+// An allowlist entry without a ref trusts the builder at any ref; one
+// with a ref trusts exactly that ref; a shared prefix is not a match.
+func TestBuilderTrustedMatchesRefs(t *testing.T) {
+	t.Parallel()
+
+	impl := newDefaultImpl(t)
+	const generator = "https://github.com/slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml"
+	ctrls := []*controls.Control{findEmbedded(t, "builder-id-trusted")}
+	for _, tc := range []struct {
+		name    string
+		fixture string
+		trusted []string
+		want    Status
+	}{
+		{name: "bare entry matches the builder at a tag", fixture: "gha-generic-v02-tag.intoto.json", trusted: []string{generator}, want: StatusPass},
+		{name: "entry at the same tag", fixture: "gha-generic-v02-tag.intoto.json", trusted: []string{generator + "@refs/tags/v1.2.2"}, want: StatusPass},
+		{name: "entry at another tag", fixture: "gha-generic-v02-tag.intoto.json", trusted: []string{generator + "@refs/tags/v1.2.3"}, want: StatusFail},
+		{name: "prefix is not a match", fixture: "gha-generic-v02-tag.intoto.json", trusted: []string{"https://github.com/slsa-framework/slsa-github-generator/.github/workflows/generator_generic"}, want: StatusFail},
+		{name: "bare entry matches the builder at a commit", fixture: "tejolote-v1-tag.intoto.json", trusted: []string{"https://github.com/carabiner-dev/bnd/.github/workflows/release.yaml"}, want: StatusPass},
+		{name: "another workflow in the repository", fixture: "tejolote-v1-tag.intoto.json", trusted: []string{"https://github.com/carabiner-dev/bnd/.github/workflows/tests.yaml"}, want: StatusFail},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			stmt := loadPlainFixture(t, tc.fixture)
+			opts := &VerificationOptions{Params: map[string]any{"trusted_builders": tc.trusted}}
+			results, err := impl.RunControls(context.Background(), opts, ctrls, stmt)
+			require.NoError(t, err)
+			require.Len(t, results, 1)
+			assert.Equal(t, tc.want, results[0].Status, results[0].Message)
+		})
+	}
 }
 
 func TestBuilderTrustedMissingParamErrors(t *testing.T) {

@@ -10,20 +10,35 @@ description: |
   check — "the build platform that signed the provenance is one we trust
   to produce sound provenance".
 
+  Builders on GitHub Actions record the ref or commit they ran at after
+  an @ (…/release.yml@refs/tags/v1.2.3, …/release.yml@<sha>). An
+  allowlist entry naming the builder without an @ trusts it at any ref;
+  an entry with one trusts exactly that ref. Which refs a builder may
+  legitimately run at is the builder binding's concern.
+
   Per-version field paths:
     - v1.0: predicate.runDetails.builder.id
     - v0.2: predicate.builder.id
     - v0.1: predicate.builder.id
 checks:
   - predicateType: https://slsa.dev/provenance/v1
-    expression: predicate.runDetails.builder.id in params.trusted_builders
+    expression: >-
+      params.trusted_builders.exists(b,
+        predicate.runDetails.builder.id == string(b)
+        || (!string(b).contains("@") && predicate.runDetails.builder.id.startsWith(string(b) + "@")))
     parameters:
       - trusted_builders
   - predicateType: https://slsa.dev/provenance/v0.2
-    expression: predicate.builder.id in params.trusted_builders
+    expression: >-
+      params.trusted_builders.exists(b,
+        predicate.builder.id == string(b)
+        || (!string(b).contains("@") && predicate.builder.id.startsWith(string(b) + "@")))
     parameters:
       - trusted_builders
   - predicateType: https://slsa.dev/provenance/v0.1
-    expression: predicate.builder.id in params.trusted_builders
+    expression: >-
+      params.trusted_builders.exists(b,
+        predicate.builder.id == string(b)
+        || (!string(b).contains("@") && predicate.builder.id.startsWith(string(b) + "@")))
     parameters:
       - trusted_builders
