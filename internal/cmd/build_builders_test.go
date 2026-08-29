@@ -7,18 +7,17 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/carabiner-labs/slsa-verifier/pkg/slsa"
 )
 
 // A key-signed build attestation from a builder the registry does not
-// know is refused with the flags that bind it, accepted unproven with
-// --allow-unbound-builder, and bound with --builder id=<key spec>.
+// know verifies with builder.id reported unproven, is bound by naming
+// the key with --signer, and by --builder id=<key spec>.
 func TestRunBuildBuilderBinding(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
@@ -42,20 +41,22 @@ func TestRunBuildBuilderBinding(t *testing.T) {
 		return out.String(), err
 	}
 
-	t.Run("unbound builder is refused", func(t *testing.T) {
+	t.Run("unbound builder verifies unproven", func(t *testing.T) {
 		t.Parallel()
-		_, err := run(t, func(*buildOptions) {})
-		require.ErrorIs(t, err, slsa.ErrBuilderUnbound)
-		assert.Contains(t, err.Error(), "--builder https://example.com/builder=")
-		assert.Contains(t, err.Error(), "--allow-unbound-builder")
-		assert.Contains(t, err.Error(), k.spec, "the error names who signed")
+		out, err := run(t, func(*buildOptions) {})
+		require.NoError(t, err)
+		assert.True(t, strings.HasPrefix(out, "PASS\n"))
+		assert.Contains(t, out, "unproven")
+		assert.Contains(t, out, k.spec, "the notice names who signed")
+		assert.Contains(t, out, "[SKIP]  L2  builder-identity-bound")
 	})
 
-	t.Run("allowed unbound builder passes unproven", func(t *testing.T) {
+	t.Run("expected signer binds the builder", func(t *testing.T) {
 		t.Parallel()
-		out, err := run(t, func(o *buildOptions) { o.AllowUnbound = true })
+		out, err := run(t, func(o *buildOptions) { o.SignerSpecs = []string{k.spec} })
 		require.NoError(t, err)
-		assert.Contains(t, out, "[SKIP]  L2  builder-identity-bound")
+		assert.Contains(t, out, "[PASS]  L2  builder-identity-bound")
+		assert.NotContains(t, out, "unproven")
 	})
 
 	t.Run("bound builder passes", func(t *testing.T) {

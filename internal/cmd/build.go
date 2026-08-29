@@ -121,11 +121,12 @@ fails. Without any, the attestation is verified on its content alone.
 A signed attestation's builder.id is bound to the identity that signed
 it through the builder registry, which knows the slsa-github-generator
 builders and any GitHub Actions workflow signing its own provenance.
-A builder the registry does not know, signed by an identity no known
-builder uses, is refused: bind it with --builder <id>=<signer spec>
-(or <id>=<OIDC issuer>, for workflow-style identities whose subject is
-the builder id), load a registry file with --builders, or accept the
-claim unproven with --allow-unbound-builder.`,
+Bind a builder of your own with --builder <id>=<signer spec> (or
+<id>=<OIDC issuer>, for workflow-style identities whose subject is the
+builder id) or a registry file passed with --builders; naming the
+signer you expect with --signer binds whatever builder it signs for.
+A signed attestation whose builder nothing binds still verifies, with
+builder.id reported as unproven.`,
 		Use: "build <attestation-path> [artifact...]",
 		Example: fmt.Sprintf(`  # Verify provenance from the slsa-github-generator
   %[1]s build --param expected_source:github.com/example/repo \
@@ -213,7 +214,6 @@ func runBuild(cmd *cobra.Command, opts *buildOptions) error {
 		slsa.WithSubjects(expected),
 		slsa.WithGitDigestAliases(opts.shared.GitDigestAliases),
 		slsa.WithSkipBuildTypeChecks(opts.SkipBuildTypeChecks),
-		slsa.WithAllowUnboundBuilder(opts.AllowUnbound),
 		slsa.WithParams(opts.shared.Params),
 		slsa.WithRequireSignatures(opts.shared.RequireSignatures),
 		slsa.WithExpectedSigners(opts.Signers),
@@ -236,12 +236,6 @@ func runBuild(cmd *cobra.Command, opts *buildOptions) error {
 	// already says what to set, so surface it as is.
 	if errors.Is(err, slsa.ErrBuildTypeParamsUnset) {
 		return err
-	}
-	// Likewise an unbound builder: say which flags bind it.
-	var unbound *slsa.BuilderUnboundError
-	if errors.As(err, &unbound) {
-		return fmt.Errorf("%w\nbind it with --builder %s=<signer spec or issuer>, load a registry with --builders, "+
-			"or pass --allow-unbound-builder to accept builder.id unproven", err, unbound.BuilderID)
 	}
 	if err != nil {
 		return fmt.Errorf("running verification: %w", err)

@@ -5,7 +5,6 @@ package slsa
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 
@@ -15,30 +14,6 @@ import (
 	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/builders"
 	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/eval"
 )
-
-// ErrBuilderUnbound is returned when a signed statement names a builder
-// the registry does not know and was signed by an identity no known
-// builder uses: nothing ties the builder.id claim to the signature.
-// Bind the builder to its signer in the registry, or allow unbound
-// builders with VerificationOptions.AllowUnboundBuilder. The error
-// returned is a *BuilderUnboundError.
-var ErrBuilderUnbound = errors.New("builder is not bound to a signing identity")
-
-// BuilderUnboundError says which builder is unbound and who signed the
-// statement instead. It matches ErrBuilderUnbound with errors.Is.
-type BuilderUnboundError struct {
-	BuilderID string
-	// Signers are the principals of the verified signers.
-	Signers []string
-}
-
-func (e *BuilderUnboundError) Error() string {
-	return fmt.Sprintf("builder %q is not bound to a signing identity: the registry knows neither the builder nor its signer %s",
-		e.BuilderID, strings.Join(e.Signers, ", "))
-}
-
-// Is makes the error match ErrBuilderUnbound.
-func (*BuilderUnboundError) Is(target error) bool { return target == ErrBuilderUnbound }
 
 // BuilderBindingControlID identifies the core result of binding the
 // provenance's builder.id to the identity that signed the statement.
@@ -60,12 +35,14 @@ const builderBindingLevel = 2
 //     claims: another identity, the builder at a disallowed ref, a known
 //     builder's workflow claiming a different builder, or a certificate
 //     issued to another source repository;
+//   - PASS, too, when the registry knows neither builder.id nor the
+//     signer but the signer is one of opts.ExpectedSigners: naming the
+//     signer you expect binds whatever builder it signs for;
 //   - SKIP when the statement carries no verified signature, since the
 //     binding needs one; whether that is acceptable is the signature
 //     layer's decision;
-//   - ErrBuilderUnbound when neither builder.id nor the signer is known
-//     to the registry, unless opts.AllowUnboundBuilder, which skips the
-//     control and says so.
+//   - SKIP, saying builder.id is unproven, when the registry knows
+//     neither builder.id nor the signer and no expected signer matches.
 //
 // Statements without a builder (the source track) produce no result.
 func (*defaultImplementation) CheckBuilder(_ context.Context, opts *VerificationOptions, registry *builders.Registry, statement attestation.Statement) (*ControlResult, error) {
@@ -99,7 +76,7 @@ func (*defaultImplementation) CheckBuilder(_ context.Context, opts *Verification
 	known := registry.Lookup(builderID)
 	var failure *ControlResult
 	for _, signer := range signers {
-		outcome := bindBuilder(registry, known, builderID, signer, expectedSource)
+		outcome := bindBuilder(registry, known, builderID, signer, expectedSource, opts)
 		switch outcome.Status {
 		case StatusPass:
 			cr.Status = StatusPass
@@ -123,25 +100,28 @@ func (*defaultImplementation) CheckBuilder(_ context.Context, opts *Verification
 	for _, s := range signers {
 		principals = append(principals, s.Principal())
 	}
-	if opts == nil || !opts.AllowUnboundBuilder {
-		return nil, &BuilderUnboundError{BuilderID: builderID, Signers: principals}
-	}
 	cr.Status = StatusSkipped
-	cr.Message = fmt.Sprintf("builder %q is not in the registry and was signed by %s, which no known builder uses: builder.id is unproven",
+	cr.Message = fmt.Sprintf("builder.id %q is unproven: signed by %s, which no known builder uses",
 		builderID, strings.Join(principals, ", "))
 	return cr, nil
 }
 
 // bindBuilder decides whether one verified signer proves builderID.
 // known is the registry entry builderID names, if any. The returned
-// result is PASS, FAIL, or SKIP when the registry knows neither side.
-func bindBuilder(registry *builders.Registry, known *builders.Builder, builderID string, signer *sapi.Identity, expectedSource string) *ControlResult {
+// result is PASS, FAIL, or SKIP when the registry knows neither side
+// and the signer is not an expected one.
+func bindBuilder(registry *builders.Registry, known *builders.Builder, builderID string, signer *sapi.Identity, expectedSource string, opts *VerificationOptions) *ControlResult {
 	entry := registry.ForSigner(signer)
 	principal := signer.Principal()
 	if entry == nil {
 		if known != nil {
 			return &ControlResult{Status: StatusFail, Message: fmt.Sprintf(
 				"builder.id names %s but the statement was signed by %s, which is not its signer", known.Title, principal)}
+		}
+		// Neither side is known: the caller naming this signer as one
+		// they expect binds the builder to it.
+		if isExpectedSigner(signer, opts) {
+			return &ControlResult{Status: StatusPass, Message: "signed by " + principal + ", an expected signer"}
 		}
 		return &ControlResult{Status: StatusSkipped}
 	}
@@ -189,6 +169,21 @@ func bindBuilder(registry *builders.Registry, known *builders.Builder, builderID
 		msg += ", a delegator: builder.id names the delegated builder"
 	}
 	return &ControlResult{Status: StatusPass, Message: msg}
+}
+
+// isExpectedSigner reports whether signer matches one of the caller's
+// expected signer identities.
+func isExpectedSigner(signer *sapi.Identity, opts *VerificationOptions) bool {
+	if opts == nil {
+		return false
+	}
+	single := &sapi.SignatureVerification{Identities: []*sapi.Identity{signer}}
+	for _, expected := range opts.ExpectedSigners {
+		if single.MatchesIdentity(expected) {
+			return true
+		}
+	}
+	return false
 }
 
 // verifiedSigners returns the identities recorded on the statement's

@@ -121,6 +121,12 @@ func (v *Verifier) Verify(ctx context.Context, statement attestation.Statement, 
 	if binding != nil {
 		coreResults = append(coreResults, binding)
 	}
+	// A signed statement whose builder nothing proves is accepted, but
+	// said out loud: the roster hides skipped controls by default.
+	var notice string
+	if binding != nil && binding.Status == StatusSkipped && len(verifiedSigners(statement)) > 0 {
+		notice = binding.Message
+	}
 
 	// Layer 5: select and run buildType controls (optional).
 	var buildTypeResults []*ControlResult
@@ -158,6 +164,7 @@ func (v *Verifier) Verify(ctx context.Context, statement attestation.Statement, 
 		// Record the spec version the core category resolved to so
 		// callers (and emitted VSAs) can state which criteria applied.
 		result.SpecVersion = controls.SpecVersionOf(category)
+		result.Message = joinMessages(result.Message, notice)
 		result.Subjects = subjects
 		if !subject.AllMatched(subjects) {
 			result.Status = StatusFail

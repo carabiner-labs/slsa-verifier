@@ -13,9 +13,8 @@ import (
 )
 
 // builderOptions holds the flags that bind builders to the identities
-// signing their provenance: bindings given on the command line, a
-// registry file extending the embedded one, and the escape hatch for
-// builders bound to nothing.
+// signing their provenance: bindings given on the command line and a
+// registry file extending the embedded one.
 type builderOptions struct {
 	// BuilderSpecs holds the raw --builder values, "id=signer-spec" or
 	// "id=issuer".
@@ -24,10 +23,6 @@ type builderOptions struct {
 	// RegistryPath is a registry file or directory (--builders) merged
 	// over the embedded registry.
 	RegistryPath string
-
-	// AllowUnbound accepts a signed statement whose builder is bound to
-	// no signing identity, reporting it unproven instead of refusing.
-	AllowUnbound bool
 
 	// registry is the merged registry, nil when nothing extends the
 	// embedded one. Populated by Validate.
@@ -43,11 +38,6 @@ func (o *builderOptions) AddFlags(cmd *cobra.Command) {
 	cmd.PersistentFlags().StringVar(
 		&o.RegistryPath, "builders", "",
 		"YAML file or directory of builder bindings, merged over the embedded registry",
-	)
-	cmd.PersistentFlags().BoolVar(
-		&o.AllowUnbound, "allow-unbound-builder", false,
-		"accept a signed attestation whose builder is bound to no signing identity, "+
-			"reporting builder.id as unproven instead of refusing",
 	)
 }
 

@@ -100,12 +100,6 @@ type VerificationOptions struct {
 	// is the default and skips identity matching.
 	ExpectedSigners []*sapi.Identity
 
-	// AllowUnboundBuilder accepts a signed statement whose builder the
-	// registry does not know and whose signer no known builder uses,
-	// reporting the builder binding as skipped instead of refusing with
-	// ErrBuilderUnbound.
-	AllowUnboundBuilder bool
-
 	// Subjects are the artifacts the caller holds and expects the
 	// statement to be about. When non-empty, every one of them must
 	// match a subject of the statement or the verification fails. Empty
@@ -221,15 +215,6 @@ func WithExpectedSigner(id *sapi.Identity) VerificationOption {
 func WithExpectedSigners(ids []*sapi.Identity) VerificationOption {
 	return func(o *VerificationOptions) error {
 		o.ExpectedSigners = ids
-		return nil
-	}
-}
-
-// WithAllowUnboundBuilder accepts signed statements whose builder is
-// bound to no signing identity. See VerificationOptions.AllowUnboundBuilder.
-func WithAllowUnboundBuilder(allow bool) VerificationOption {
-	return func(o *VerificationOptions) error {
-		o.AllowUnboundBuilder = allow
 		return nil
 	}
 }

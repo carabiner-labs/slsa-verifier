@@ -156,13 +156,16 @@ func TestBuilderBinding(t *testing.T) {
 				assert.Equal(t, slsa.StatusFail, res.Status)
 				assert.Less(t, res.SLSALevel, 2, "a failed binding caps the level below L2")
 			}
+			if tc.verification == nil {
+				assert.Empty(t, res.Message, "an unsigned statement is not announced as unproven")
+			}
 		})
 	}
 }
 
 // A builder the registry does not know, signed by an identity no known
-// builder uses, is refused unless unbound builders are allowed, and
-// binds once the caller registers its signer.
+// builder uses, is accepted with builder.id reported unproven; naming
+// the signer as expected binds it; registering its signer binds it too.
 func TestBuilderBindingUnbound(t *testing.T) {
 	t.Parallel()
 	v, err := slsa.New()
@@ -173,18 +176,37 @@ func TestBuilderBindingUnbound(t *testing.T) {
 		slsa.WithParam("trusted_builders", []string{"https://example.com/builder"}),
 	}
 
-	_, err = v.Verify(context.Background(), stmt, params...)
-	require.ErrorIs(t, err, slsa.ErrBuilderUnbound)
-	assert.Contains(t, err.Error(), "https://example.com/builder")
-	assert.Contains(t, err.Error(), "user@example.com")
-
-	res, err := v.Verify(context.Background(), stmt, append(params, slsa.WithAllowUnboundBuilder(true))...)
+	res, err := v.Verify(context.Background(), stmt, params...)
 	require.NoError(t, err)
 	cr := coreResult(t, res, slsa.BuilderBindingControlID)
 	assert.Equal(t, slsa.StatusSkipped, cr.Status)
 	assert.Contains(t, cr.Message, "unproven")
+	assert.Contains(t, cr.Message, "user@example.com")
 	assert.Equal(t, slsa.StatusPass, res.Status)
+	assert.Equal(t, 3, res.SLSALevel)
+	assert.Contains(t, res.Message, "unproven", "an unproven builder is said out loud in the result")
 
+	// Naming the signer as expected binds the builder to it.
+	expected, err := sapi.NewIdentityFromSpec("sigstore::https://accounts.google.com::user@example.com")
+	require.NoError(t, err)
+	res, err = v.Verify(context.Background(), stmt, append(params, slsa.WithExpectedSigner(expected))...)
+	require.NoError(t, err)
+	cr = coreResult(t, res, slsa.BuilderBindingControlID)
+	assert.Equal(t, slsa.StatusPass, cr.Status, cr.Message)
+	assert.Contains(t, cr.Message, "an expected signer")
+	assert.Empty(t, res.Message)
+
+	// An expected signer does not override what the registry knows: a
+	// known builder must still be signed by its own signer.
+	generator := &signedAs{Statement: loadFixture(t, "gha-generic-v02-tag.intoto.json"), verification: verifiedBy(googleIdentity("user@example.com"))}
+	res, err = v.Verify(context.Background(), generator,
+		slsa.WithParam("trusted_builders", []string{"unused"}), slsa.WithSkipBuildTypeChecks(true), slsa.WithExpectedSigner(expected))
+	require.NoError(t, err)
+	cr = coreResult(t, res, slsa.BuilderBindingControlID)
+	assert.Equal(t, slsa.StatusFail, cr.Status, cr.Message)
+	assert.Contains(t, cr.Message, "not its signer")
+
+	// Registering the builder's signer binds it.
 	registry, err := builders.LoadEmbedded()
 	require.NoError(t, err)
 	binding, err := builders.ParseBinding("https://example.com/builder=sigstore::https://accounts.google.com::user@example.com")
@@ -196,9 +218,9 @@ func TestBuilderBindingUnbound(t *testing.T) {
 	require.NoError(t, err)
 	cr = coreResult(t, res, slsa.BuilderBindingControlID)
 	assert.Equal(t, slsa.StatusPass, cr.Status, cr.Message)
-	assert.Equal(t, 3, res.SLSALevel)
+	assert.Empty(t, res.Message)
 
-	// The bound builder signed by someone else is a failure, not unbound.
+	// The bound builder signed by someone else is a failure, not unproven.
 	other := &signedAs{Statement: loadFixture(t, "v1-build.intoto.json"), verification: verifiedBy(googleIdentity("other@example.com"))}
 	res, err = bound.Verify(context.Background(), other, params...)
 	require.NoError(t, err)

@@ -46,20 +46,33 @@ provenance to be signed by the build platform.
 | The builder's own signer, at another ref or a ref the policy rejects | `FAIL` |
 | A known builder's signer signed provenance naming a different builder | `FAIL` |
 | The certificate was issued to another source repository | `FAIL` |
-| Neither the builder nor any signer is known to the registry | refused with `ErrBuilderUnbound`, or `SKIP` with `--allow-unbound-builder` |
+| Neither the builder nor any signer is known, but a signer is one named with `--signer` | `PASS` — naming the signer you expect binds whatever builder it signs for |
+| Neither the builder nor any signer is known to the registry | `SKIP` — "builder.id is unproven", repeated in the result header so it is seen without `-v` |
 | The predicate has no builder (source track) | no row |
 
 A `FAIL` fails the run and caps the level below L2, like any core
 control. With several verified signers, one that binds is enough;
-otherwise the first failure is reported, and the statement is unbound
+otherwise the first failure is reported, and the builder is unproven
 only when no signer is known at all.
 
-Unbound is refused by default because it is the one case where the tool
-cannot tell a legitimate builder from an impostor: the user trusts
-`https://ci.example.com/builder`, the statement names it, the signature
-verified — but nothing says that signer *is* that builder. Bind the
-builder (below) or, to accept `builder.id` unproven, pass
-`--allow-unbound-builder`.
+An unproven builder does not fail the run. The verifier's defaults are
+permissive — signatures are not even required unless asked — and a
+statement must not become harder to verify because its author started
+signing it. What the tool cannot do is tell a legitimate unknown builder
+from an impostor, so it says so in the result header:
+
+```
+PASS
+SLSA Level: 3 (spec v1.0)
+builder.id "https://ci.example.com/builder" is unproven: signed by spiffe://example.com/ci/builder, which no known builder uses
+```
+
+To turn that into a proof, bind the builder: register it (below), or
+name the signer you expect with `--signer`, which binds any builder the
+registry does not know to that signer — the same role `--signer` plays
+for verifiers on the `vsa` command. Binding never overrides the registry:
+a known builder must be signed by its own signer, whatever `--signer`
+says.
 
 ## What the registry knows out of the box
 
@@ -134,7 +147,7 @@ slsa-verifier build [flags] provenance.json
   --builder id=<signer spec>      bind one builder (repeatable)
   --builder id=<OIDC issuer>      same, deriving the signer as a registry entry would
   --builders <file|dir>           merge a registry file over the embedded one
-  --allow-unbound-builder         accept builder.id unproven instead of refusing
+  --signer <signer spec>          expect this signer; binds builders the registry does not know
 ```
 
 Precedence is `--builder` over `--builders` over the embedded registry.
@@ -150,7 +163,13 @@ slsa-verifier build --param expected_source:github.com/example/repo \
     --param trusted_builders:[https://github.com/slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@refs/tags/v2.1.0] \
     --param expected_tag:v1.2.3 provenance.intoto.jsonl app.tgz
 
-# Your own builder, signed with a key: bind it to the key.
+# Your own builder, signed with a key: bind it to the key, either by
+# expecting that signer or by registering it as the builder's.
+slsa-verifier build --key ci.pem \
+    --param expected_source:github.com/example/repo \
+    --param trusted_builders:[https://ci.example.com/builder] \
+    --signer key::ecdsa-sha2-nistp256::<key id> \
+    --skip-buildtype-checks provenance.dsse.json
 slsa-verifier build --key ci.pem \
     --param expected_source:github.com/example/repo \
     --param trusted_builders:[https://ci.example.com/builder] \
@@ -161,13 +180,9 @@ slsa-verifier build --key ci.pem \
 slsa-verifier build --builders ci/builders.yaml ... provenance.sigstore.json
 ```
 
-When a signed attestation names a builder nothing binds, the command
-refuses and says what would:
-
-```
-Error: builder "https://ci.example.com/builder" is not bound to a signing identity: the registry knows neither the builder nor its signer spiffe://example.com/ci/builder
-bind it with --builder https://ci.example.com/builder=<signer spec or issuer>, load a registry with --builders, or pass --allow-unbound-builder to accept builder.id unproven
-```
+When a signed attestation names a builder nothing binds, the run still
+verifies and the header says the builder is unproven; the
+`builder-identity-bound` row is skipped and shown with `-v`.
 
 ## Using it from Go
 
@@ -183,15 +198,14 @@ err = reg.Add(b)                              // replaces an entry with the same
 
 v, err := slsa.New(slsa.WithBuilders(reg))
 res, err := v.Verify(ctx, statement,
-    slsa.WithAllowUnboundBuilder(false),      // the default: refuse unbound builders
+    slsa.WithExpectedSigner(id),              // binds builders the registry does not know
     // ...
 )
 ```
 
-`Verify` returns a `*slsa.BuilderUnboundError` (matching
-`slsa.ErrBuilderUnbound`) naming the builder and the signers when the
-statement is unbound; otherwise the binding is the core result with
-`ID == slsa.BuilderBindingControlID`. `Registry.Lookup(builderID)` and
+The binding is the core result with `ID == slsa.BuilderBindingControlID`;
+when it is skipped for an unproven builder, `Result.Message` repeats
+its message. `Registry.Lookup(builderID)` and
 `Registry.ForSigner(identity)` answer the two questions the binding
 asks — which builder does this id name, and whose signer is this
 identity — exact entries first.
