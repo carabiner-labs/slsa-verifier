@@ -36,3 +36,6 @@ go.work.sum
 
 # Locally built binary
 /slsa-verifier
+
+# GoReleaser output
+/dist/
