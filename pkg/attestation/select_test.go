@@ -22,6 +22,12 @@ const (
 	commitB    = "b797d53cd7fe550be0dcddb05594343dce3e4cc5"
 )
 
+// otherSignature is a second distinct signature for duplicate tests.
+type otherSignature struct{}
+
+func (otherSignature) GetKeyid() string { return "other-keyid" }
+func (otherSignature) GetSig() []byte   { return []byte("other") }
+
 func envAbout(pType, commit string) Envelope {
 	return &fakeEnvelope{stmt: &fakeStmt{
 		pType:    cdattestation.PredicateType(pType),
@@ -89,6 +95,19 @@ func TestSelect(t *testing.T) {
 		env, err = Select(envs, &Selection{PredicateTypes: []string{sourceProv}, Subjects: []*subject.Expected{commitASubject}})
 		require.NoError(t, err)
 		assert.Equal(t, commitA, env.GetStatement().GetSubjects()[0].GetDigest()["gitCommit"])
+	})
+	t.Run("exact duplicates are one attestation", func(t *testing.T) {
+		t.Parallel()
+		signed := func() Envelope {
+			return &fakeEnvelope{stmt: envAbout(sourceProv, commitA).GetStatement(), sigs: oneSig}
+		}
+		env, err := Select([]Envelope{signed(), envAbout(vsaV1, commitA), signed()}, &Selection{PredicateTypes: []string{sourceProv}})
+		require.NoError(t, err)
+		assert.Equal(t, sourceProv, string(env.GetStatement().GetPredicateType()))
+		// The same statement under another signature is another attestation.
+		other := &fakeEnvelope{stmt: envAbout(sourceProv, commitA).GetStatement(), sigs: []cdattestation.Signature{otherSignature{}}}
+		_, err = Select([]Envelope{signed(), other}, &Selection{PredicateTypes: []string{sourceProv}})
+		require.ErrorIs(t, err, ErrAmbiguousAttestation)
 	})
 	t.Run("envelopes without a statement are skipped", func(t *testing.T) {
 		t.Parallel()

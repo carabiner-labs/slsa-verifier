@@ -11,6 +11,7 @@ import (
 
 	sapi "github.com/carabiner-dev/signer/api/v1"
 
+	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/verifiers"
 	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/vsa"
 	"github.com/carabiner-labs/slsa-verifier/pkg/subject"
 )
@@ -47,6 +48,9 @@ type VerifierBinding struct {
 //     signed the envelope: the envelope's verified signature must
 //     match one of the identities authorized for that verifier. It
 //     runs whenever the matched verifier has any authorized signer.
+//   - Registry supplies the signer of an accepted verifier given
+//     without one, when it knows the id, along with the ref policy
+//     that signer must satisfy.
 //   - AllowUnbound permits verifiers with no authorized signer at all,
 //     in which case only the ID is matched. Off by default, VerifyVSA
 //     returns ErrVerifierUnbound instead.
@@ -70,9 +74,12 @@ type VerifierBinding struct {
 //     VSA.DependencyLevels (count values are not consulted).
 //     Skipped when empty.
 type VSAOptions struct {
-	Verifiers          []VerifierBinding
-	Signers            []*sapi.Identity
-	AllowUnbound       bool
+	Verifiers    []VerifierBinding
+	Signers      []*sapi.Identity
+	AllowUnbound bool
+	// Registry binds verifier ids to their signers, for accepted
+	// verifiers given without one; see verifiers.Registry.
+	Registry           *verifiers.Registry
 	Subjects           []*subject.Expected
 	NoGitDigestAliases bool
 	Levels             []string
@@ -92,11 +99,24 @@ func (o *VSAOptions) binding(id string) (VerifierBinding, bool) {
 }
 
 // authorizedSigners returns the identities allowed to sign for b: its
-// own plus the wildcard set.
+// own, the registry's for its id when it has none of its own, plus the
+// wildcard set.
 func (o *VSAOptions) authorizedSigners(b VerifierBinding) []*sapi.Identity {
-	ids := make([]*sapi.Identity, 0, len(b.Signers)+len(o.Signers))
+	ids := make([]*sapi.Identity, 0, len(b.Signers)+len(o.Signers)+1)
 	ids = append(ids, b.Signers...)
+	if entry := o.registered(b); entry != nil {
+		ids = append(ids, entry.Identity())
+	}
 	return append(ids, o.Signers...)
+}
+
+// registered returns the registry entry binding b's id, when b has no
+// signer of its own and the registry knows the id.
+func (o *VSAOptions) registered(b VerifierBinding) *verifiers.Verifier {
+	if len(b.Signers) > 0 || o.Registry == nil {
+		return nil
+	}
+	return o.Registry.Lookup(b.ID)
 }
 
 // validate checks the options are usable before any parsing happens.
@@ -218,7 +238,7 @@ func (*Verifier) VerifyVSA(_ context.Context, env Envelope, opts *VSAOptions) (*
 	// claimed verifier is one we accept, and only when it has signers.
 	if b, ok := opts.binding(v.Verifier.ID); ok {
 		if allowed := opts.authorizedSigners(b); len(allowed) > 0 {
-			checks = append(checks, checkVSASigner(env, b.ID, allowed))
+			checks = append(checks, checkVSASigner(env, b.ID, allowed, opts.registered(b)))
 		}
 	}
 	if len(opts.Levels) > 0 {
@@ -276,18 +296,33 @@ func checkVSAVerifier(v *vsa.VSA, accepted []VerifierBinding) VSACheck {
 // checkVSASigner binds the matched verifier to the envelope's signer:
 // the envelope must carry a verified signature whose identity matches
 // one of the signers authorized for that verifier.
-func checkVSASigner(env Envelope, verifierID string, allowed []*sapi.Identity) VSACheck {
+func checkVSASigner(env Envelope, verifierID string, allowed []*sapi.Identity, entry *verifiers.Verifier) VSACheck {
 	c := VSACheck{Name: fmt.Sprintf("Signer is authorized for verifier %q", verifierID)}
 	ver := env.GetVerification()
 	if ver == nil || !ver.GetVerified() {
 		c.Message = "envelope carries no verified signature"
 		return c
 	}
-	for _, id := range allowed {
-		if id != nil && ver.MatchesIdentity(id) {
+	// The registry's signer is authorized only at a ref its policy
+	// allows: the same workflow from a branch is not the verifier.
+	var refMessage string
+	for _, signer := range recordedIdentities(ver) {
+		single := &sapi.SignatureVerification{Identities: []*sapi.Identity{signer}}
+		for _, id := range allowed {
+			if id == nil || !single.MatchesIdentity(id) {
+				continue
+			}
+			if entry != nil && id == entry.Identity() && !entry.AllowsSigner(signer) {
+				refMessage = fmt.Sprintf("signed by %s at a ref the registry does not allow for this verifier", signer.Principal())
+				continue
+			}
 			c.Pass = true
 			return c
 		}
+	}
+	if refMessage != "" {
+		c.Message = refMessage
+		return c
 	}
 	if signers := recordedSigners(ver); len(signers) > 0 {
 		c.Message = fmt.Sprintf("signed by %q, not authorized for this verifier", signers)
@@ -295,6 +330,18 @@ func checkVSASigner(env Envelope, verifierID string, allowed []*sapi.Identity) V
 	}
 	c.Message = "verified signature matches none of the authorized signers"
 	return c
+}
+
+// recordedIdentities returns the identities an envelope's verification
+// recorded for its verified signature, when it exposes them.
+func recordedIdentities(ver interface{ GetVerified() bool }) []*sapi.Identity {
+	sv, ok := ver.(interface {
+		GetSignature() *sapi.SignatureVerification
+	})
+	if !ok || sv.GetSignature() == nil || !sv.GetSignature().GetVerified() {
+		return nil
+	}
+	return sv.GetSignature().GetIdentities()
 }
 
 // recordedSigners lists the principals of the identities an envelope's

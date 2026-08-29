@@ -16,6 +16,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/carabiner-labs/slsa-verifier/pkg/attestation"
+	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/verifiers"
 )
 
 // vsaOptions composes the flags specific to the vsa subcommand. The
@@ -37,6 +38,13 @@ type vsaOptions struct {
 	// AllowUnbound accepts verifiers that have no authorized signer.
 	AllowUnbound bool
 
+	// RegistryPath is a verifier registry file or directory
+	// (--verifiers) merged over the embedded registry.
+	RegistryPath string
+
+	// Registry is the merged verifier registry. Populated by Validate.
+	Registry *verifiers.Registry
+
 	Levels       []string
 	Resource     string
 	Policy       string
@@ -54,29 +62,32 @@ func (o *vsaOptions) AddFlags(cmd *cobra.Command) {
 	o.subjectOptions.AddFlags(cmd)
 	cmd.PersistentFlags().StringArrayVar(
 		&o.VerifierSpecs, "verifier", nil,
-		"accepted verifier.id, optionally bound to a signer as id=<signer spec> "+
-			"(repeatable; OR-matched; the same id may be bound to several signers)",
+		"accepted verifier.id, optionally bound to a signer as id=<signer spec> (repeatable)",
 	)
 	cmd.PersistentFlags().BoolVar(
 		&o.AllowUnbound, "allow-unbound-verifier", false,
-		"accept a --verifier that has no authorized signer, matching its id only",
+		"accept a --verifier that has no authorized signer (match its id only)",
+	)
+	cmd.PersistentFlags().StringVar(
+		&o.RegistryPath, "verifiers", "",
+		"YAML file or directory binding verifier ids to their signers, merged over the embedded registry; "+
+			"a --verifier given without a signer takes the registry's",
 	)
 	cmd.PersistentFlags().StringArrayVar(
 		&o.Levels, "level", nil,
-		"required SLSA level, e.g. SLSA_BUILD_LEVEL_3 (repeatable; OR-matched; "+
-			"at-or-above within the same track — SLSA_BUILD_LEVEL_4 satisfies a want of SLSA_BUILD_LEVEL_3)",
+		"required at-or-aobove SLSA level (eg SLSA_BUILD_LEVEL_3)",
 	)
 	cmd.PersistentFlags().StringVar(
 		&o.Resource, "resource", "",
-		"expected resourceUri (exact match; skipped if empty)",
+		"expected resourceUri (exact match, skipped if empty)",
 	)
 	cmd.PersistentFlags().StringVar(
 		&o.Policy, "policy", "",
-		"expected policy.uri (exact match; skipped if empty)",
+		"expected policy.uri (exact match, skipped if empty)",
 	)
 	cmd.PersistentFlags().StringArrayVar(
 		&o.Dependencies, "dependency", nil,
-		"expected dependencyLevels key (repeatable; AND-matched — every entry must appear in the map)",
+		"expected dependencyLevels key (repeatable, AND-matched, every entry must appear in the map)",
 	)
 }
 
@@ -128,15 +139,30 @@ func (o *vsaOptions) Validate() error {
 		errs = append(errs, errors.New("--verifier is required"))
 	}
 
+	registry, err := verifiers.LoadEmbedded()
+	if err != nil {
+		errs = append(errs, fmt.Errorf("loading the embedded verifier registry: %w", err))
+		registry = &verifiers.Registry{}
+	}
+	if o.RegistryPath != "" {
+		custom, err := verifiers.Load(o.RegistryPath)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("--verifiers: %w", err))
+		} else if err := registry.Merge(custom); err != nil {
+			errs = append(errs, fmt.Errorf("--verifiers: %w", err))
+		}
+	}
+	o.Registry = registry
+
 	// A verifier.id is a claim written into the document; only a signer
 	// bound to it makes the match mean anything. Refuse unbound
 	// verifiers unless the user says so explicitly.
 	if !o.AllowUnbound && len(o.Signers) == 0 {
 		for _, b := range o.Verifiers {
-			if len(b.Signers) == 0 {
+			if len(b.Signers) == 0 && registry.Lookup(b.ID) == nil {
 				errs = append(errs, fmt.Errorf(
-					"verifier %q has no authorized signer: bind one with --verifier %s=<signer spec>, "+
-						"add a wildcard --signer, or pass --allow-unbound-verifier", b.ID, b.ID))
+					"verifier %q has no authorized signer: bind one with --verifier %s=<signer spec> or a "+
+						"registry file passed with --verifiers, add a wildcard --signer, or pass --allow-unbound-verifier", b.ID, b.ID))
 			}
 		}
 	}
@@ -147,7 +173,7 @@ func (o *vsaOptions) Validate() error {
 		o.shared.RequireSignatures = true
 	}
 	for _, b := range o.Verifiers {
-		if len(b.Signers) > 0 {
+		if len(b.Signers) > 0 || registry.Lookup(b.ID) != nil {
 			o.shared.RequireSignatures = true
 		}
 	}
@@ -166,6 +192,7 @@ func (o *vsaOptions) toLibOptions() *attestation.VSAOptions {
 		Verifiers:    o.Verifiers,
 		Signers:      o.Signers,
 		AllowUnbound: o.AllowUnbound,
+		Registry:     o.Registry,
 		Levels:       o.Levels,
 		Resource:     o.Resource,
 		Policy:       o.Policy,
@@ -185,7 +212,9 @@ The VSA's envelope signature is verified using --key (and optionally
 version-neutral representation and the following checks run:
 
   * verificationResult must be "PASSED" (always enforced)
-  * verifier.id must be one of --verifier (always enforced)
+  * verifier.id must be one of --verifier (always enforced); a verifier
+    given without a signer takes the one a registry file passed with
+    --verifiers binds to its id
   * the envelope's verified signer must be authorized for that verifier:
     bound to it with --verifier <id>=<signer spec>, or a wildcard --signer
     (enforced unless --allow-unbound-verifier is given)
@@ -197,7 +226,7 @@ version-neutral representation and the following checks run:
 
 Artifact files given after the attestation are hashed with the digest
 algorithms the VSA's subjects use, and --subject states a digest
-directly; the VSA must be about every one of them or the verification
+directly. The VSA must be about every one of them or the verification
 fails. Without any, the VSA is verified on its content alone.`,
 		Use: "vsa <attestation-path> [artifact...]",
 		Example: fmt.Sprintf(`  # Accept VSAs from one verifier, bound to the Sigstore identity that issues them

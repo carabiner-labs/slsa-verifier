@@ -64,7 +64,9 @@ a registry file passed with `--builders`, or by naming the signer you
 expect with `--signer`; a signed attestation naming a builder nothing
 binds still verifies, with `builder.id` reported unproven.
 [docs/builder-registry.md](docs/builder-registry.md) describes the rules,
-the file format and the embedded entries.
+the file format and the embedded entries. VSA verifiers are bound the same
+way with `--verifier <id>=<spec>` or a registry file passed with
+`--verifiers`; see [docs/verifier-registry.md](docs/verifier-registry.md).
 
 ## Development
 

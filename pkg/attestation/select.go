@@ -4,9 +4,12 @@
 package attestation
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"slices"
+	"sort"
 	"strings"
 
 	"github.com/carabiner-labs/slsa-verifier/pkg/subject"
@@ -67,10 +70,18 @@ func Select(envs []Envelope, sel *Selection) (Envelope, error) {
 	}
 
 	candidates := make([]Envelope, 0, len(envs))
+	seen := map[string]bool{}
 	for _, env := range envs {
 		stmt := env.GetStatement()
 		if stmt == nil {
 			continue
+		}
+		// A note can hold the same bundle twice when two steps stored
+		// it: an exact duplicate is one attestation, not two.
+		if key := envelopeKey(env); seen[key] {
+			continue
+		} else {
+			seen[key] = true
 		}
 		if len(sel.PredicateTypes) > 0 && !slices.Contains(sel.PredicateTypes, string(stmt.GetPredicateType())) {
 			continue
@@ -106,6 +117,38 @@ func Select(envs []Envelope, sel *Selection) (Envelope, error) {
 			ErrAmbiguousAttestation, len(candidates), len(envs), kind, aboutSubjects(sel.Subjects), describeTypes(candidates))
 	}
 	return candidates[0], nil
+}
+
+// envelopeKey identifies an envelope by its predicate type, subjects,
+// predicate data and signatures, so exact duplicates share a key.
+func envelopeKey(env Envelope) string {
+	stmt := env.GetStatement()
+	var b strings.Builder
+	b.WriteString(string(stmt.GetPredicateType()))
+	for _, s := range stmt.GetSubjects() {
+		digests := s.GetDigest()
+		algos := make([]string, 0, len(digests))
+		for algo := range digests {
+			algos = append(algos, algo)
+		}
+		sort.Strings(algos)
+		for _, algo := range algos {
+			b.WriteString("|" + algo + "=" + digests[algo])
+		}
+		b.WriteString(";")
+	}
+	if pred := stmt.GetPredicate(); pred != nil {
+		b.Write(pred.GetData())
+	}
+	for _, sig := range env.GetSignatures() {
+		if s, ok := sig.(interface{ GetSig() []byte }); ok {
+			b.Write(s.GetSig())
+		} else {
+			fmt.Fprintf(&b, "%#v", sig)
+		}
+	}
+	sum := sha256.Sum256([]byte(b.String()))
+	return hex.EncodeToString(sum[:])
 }
 
 func aboutSubjects(subjects []*subject.Expected) string {
