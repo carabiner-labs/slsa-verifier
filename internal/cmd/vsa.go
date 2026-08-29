@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"sort"
 	"strings"
 	"text/tabwriter"
@@ -153,10 +152,8 @@ func (o *vsaOptions) Validate() error {
 		}
 	}
 
-	if o.AttestationPath == "" {
-		errs = append(errs, errors.New("attestation path is required"))
-	} else if _, err := os.Stat(o.AttestationPath); err != nil {
-		errs = append(errs, fmt.Errorf("attestation file: %w", err))
+	if err := checkAttestationPath(o.AttestationPath); err != nil {
+		errs = append(errs, err)
 	}
 	return errors.Join(errs...)
 }
@@ -250,7 +247,14 @@ func runVSA(cmd *cobra.Command, opts *vsaOptions) error {
 	}
 
 	v := attestation.New()
-	env, err := v.Load(opts.AttestationPath)
+	// The file may hold several attestations: pick the VSA, about the
+	// stated subjects when any were given.
+	env, err := loadEnvelope(cmd.Context(), opts.AttestationPath, &attestation.Selection{
+		Kind:               "VSA",
+		PredicateTypes:     vsaPredicateTypes,
+		Subjects:           opts.Subjects,
+		NoGitDigestAliases: !opts.shared.GitDigestAliases,
+	})
 	if err != nil {
 		return err
 	}

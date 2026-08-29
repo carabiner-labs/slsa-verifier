@@ -7,11 +7,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 
-	"github.com/carabiner-dev/collector/envelope"
 	"github.com/spf13/cobra"
 
+	"github.com/carabiner-labs/slsa-verifier/pkg/attestation"
 	"github.com/carabiner-labs/slsa-verifier/pkg/slsa"
 	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/controls"
 )
@@ -81,10 +80,8 @@ func (o *buildOptions) Validate() error {
 		o.subjectOptions.Validate(),
 		o.builderOptions.Validate(),
 	}
-	if o.AttestationPath == "" {
-		errs = append(errs, errors.New("attestation path is required"))
-	} else if _, err := os.Stat(o.AttestationPath); err != nil {
-		errs = append(errs, fmt.Errorf("attestation file: %w", err))
+	if err := checkAttestationPath(o.AttestationPath); err != nil {
+		errs = append(errs, err)
 	}
 	// --signer implies --require-signatures: matching an identity on an
 	// unsigned statement is meaningless.
@@ -164,21 +161,18 @@ func runBuild(cmd *cobra.Command, opts *buildOptions) error {
 		return fmt.Errorf("parsing keys: %w", err)
 	}
 
-	// envelope.Parsers handles the format detection (bare in-toto, DSSE,
-	// Sigstore bundle) and produces an attestation.Envelope. The
-	// pkg/slsa/predicate package's init swap ensures the predicate is
-	// parsed with the upstream SLSA proto types.
-	envs, err := envelope.Parsers.ParseFiles([]string{opts.AttestationPath})
+	// The file may hold several attestations (a release's attestations
+	// file, a commit's git note): pick the build provenance, about the
+	// stated subjects when any were given.
+	env, err := loadEnvelope(cmd.Context(), opts.AttestationPath, &attestation.Selection{
+		Kind:               "build provenance",
+		PredicateTypes:     buildPredicateTypes,
+		Subjects:           opts.Subjects,
+		NoGitDigestAliases: !opts.shared.GitDigestAliases,
+	})
 	if err != nil {
-		return fmt.Errorf("loading attestation: %w", err)
+		return err
 	}
-	if len(envs) == 0 {
-		return errors.New("no attestation parsed from file")
-	}
-	if len(envs) > 1 {
-		return fmt.Errorf("expected one attestation, got %d", len(envs))
-	}
-	env := envs[0]
 
 	// Verify envelope signatures. Bare envelopes are unsigned and Verify
 	// is a no-op for them. DSSE uses keys and Sigstore bundles verify

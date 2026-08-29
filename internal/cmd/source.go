@@ -6,16 +6,15 @@ package cmd
 import (
 	"errors"
 	"fmt"
-	"os"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/carabiner-dev/collector/envelope"
 	sapi "github.com/carabiner-dev/signer/api/v1"
 	intoto "github.com/in-toto/attestation/go/v1"
 	"github.com/spf13/cobra"
 
+	"github.com/carabiner-labs/slsa-verifier/pkg/attestation"
 	"github.com/carabiner-labs/slsa-verifier/pkg/slsa"
 	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/controls"
 	"github.com/carabiner-labs/slsa-verifier/pkg/subject"
@@ -150,10 +149,8 @@ func (o *sourceOptions) Validate() error {
 		o.controlsOptions.Validate(),
 		o.vsaOutputOptions.Validate(),
 	}
-	if o.AttestationPath == "" {
-		errs = append(errs, errors.New("attestation path is required"))
-	} else if _, err := os.Stat(o.AttestationPath); err != nil {
-		errs = append(errs, fmt.Errorf("attestation file: %w", err))
+	if err := checkAttestationPath(o.AttestationPath); err != nil {
+		errs = append(errs, err)
 	}
 	level, err := parseSourceLevel(o.Level)
 	if err != nil {
@@ -342,21 +339,24 @@ func runSource(cmd *cobra.Command, opts *sourceOptions) error {
 		return fmt.Errorf("parsing keys: %w", err)
 	}
 
-	// envelope.Parsers handles the format detection (bare in-toto, DSSE,
-	// Sigstore bundle) and produces an attestation.Envelope. The
-	// pkg/slsa/predicate package's init swap ensures the predicate is
-	// parsed with the source-tool proto types.
-	envs, err := envelope.Parsers.ParseFiles([]string{opts.AttestationPath})
+	// The file may hold several attestations, as a commit's git note
+	// does (source provenance, tag provenance, VSAs): pick the source
+	// provenance about the commit — the tag provenance when a tag is
+	// expected — over anything else.
+	prefer := append(append([]string{}, sourceProvenanceTypes...), tagProvenanceTypes...)
+	if opts.ExpectedTag != "" {
+		prefer = append(append([]string{}, tagProvenanceTypes...), sourceProvenanceTypes...)
+	}
+	env, err := loadEnvelope(cmd.Context(), opts.AttestationPath, &attestation.Selection{
+		Kind:               "source attestation",
+		PredicateTypes:     prefer,
+		Subjects:           opts.subjects(),
+		NoGitDigestAliases: !opts.shared.GitDigestAliases,
+		Prefer:             prefer,
+	})
 	if err != nil {
-		return fmt.Errorf("loading attestation: %w", err)
+		return err
 	}
-	if len(envs) == 0 {
-		return errors.New("no attestation parsed from file")
-	}
-	if len(envs) > 1 {
-		return fmt.Errorf("expected one attestation, got %d", len(envs))
-	}
-	env := envs[0]
 
 	// Verify envelope signatures. Bare envelopes are unsigned and Verify
 	// is a no-op for them. DSSE uses keys, Sigstore bundles verify
