@@ -8,6 +8,7 @@ import (
 
 	sapi "github.com/carabiner-dev/signer/api/v1"
 
+	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/builders"
 	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/controls"
 	"github.com/carabiner-labs/slsa-verifier/pkg/subject"
 )
@@ -17,6 +18,11 @@ type Options struct {
 	// Catalog is the set of controls available to the verifier. When nil,
 	// the verifier loads the embedded catalog at construction time.
 	Catalog *controls.Catalog
+
+	// Builders is the registry binding builders to their signing
+	// identities. When nil, the verifier loads the embedded registry at
+	// construction time.
+	Builders *builders.Registry
 }
 
 // DefaultOptions returns a zero-value Options struct used when no options
@@ -33,6 +39,15 @@ type Option func(*Verifier) error
 func WithCatalog(c *controls.Catalog) Option {
 	return func(v *Verifier) error {
 		v.Options.Catalog = c
+		return nil
+	}
+}
+
+// WithBuilders sets the builder registry the verifier will use,
+// replacing the embedded one.
+func WithBuilders(r *builders.Registry) Option {
+	return func(v *Verifier) error {
+		v.Options.Builders = r
 		return nil
 	}
 }
@@ -84,6 +99,12 @@ type VerificationOptions struct {
 	// least one verified signer matches one of these (OR'ed). An empty list
 	// is the default and skips identity matching.
 	ExpectedSigners []*sapi.Identity
+
+	// AllowUnboundBuilder accepts a signed statement whose builder the
+	// registry does not know and whose signer no known builder uses,
+	// reporting the builder binding as skipped instead of refusing with
+	// ErrBuilderUnbound.
+	AllowUnboundBuilder bool
 
 	// Subjects are the artifacts the caller holds and expects the
 	// statement to be about. When non-empty, every one of them must
@@ -200,6 +221,15 @@ func WithExpectedSigner(id *sapi.Identity) VerificationOption {
 func WithExpectedSigners(ids []*sapi.Identity) VerificationOption {
 	return func(o *VerificationOptions) error {
 		o.ExpectedSigners = ids
+		return nil
+	}
+}
+
+// WithAllowUnboundBuilder accepts signed statements whose builder is
+// bound to no signing identity. See VerificationOptions.AllowUnboundBuilder.
+func WithAllowUnboundBuilder(allow bool) VerificationOption {
+	return func(o *VerificationOptions) error {
+		o.AllowUnboundBuilder = allow
 		return nil
 	}
 }

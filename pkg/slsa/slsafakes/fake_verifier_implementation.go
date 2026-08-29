@@ -7,11 +7,28 @@ import (
 
 	"github.com/carabiner-dev/attestation"
 	"github.com/carabiner-labs/slsa-verifier/pkg/slsa"
+	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/builders"
 	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/controls"
 	"github.com/carabiner-labs/slsa-verifier/pkg/subject"
 )
 
 type FakeVerifierImplementation struct {
+	CheckBuilderStub        func(context.Context, *slsa.VerificationOptions, *builders.Registry, attestation.Statement) (*slsa.ControlResult, error)
+	checkBuilderMutex       sync.RWMutex
+	checkBuilderArgsForCall []struct {
+		arg1 context.Context
+		arg2 *slsa.VerificationOptions
+		arg3 *builders.Registry
+		arg4 attestation.Statement
+	}
+	checkBuilderReturns struct {
+		result1 *slsa.ControlResult
+		result2 error
+	}
+	checkBuilderReturnsOnCall map[int]struct {
+		result1 *slsa.ControlResult
+		result2 error
+	}
 	CheckIdentitiesStub        func(context.Context, *slsa.VerificationOptions, attestation.Statement) error
 	checkIdentitiesMutex       sync.RWMutex
 	checkIdentitiesArgsForCall []struct {
@@ -139,6 +156,73 @@ type FakeVerifierImplementation struct {
 	}
 	invocations      map[string][][]interface{}
 	invocationsMutex sync.RWMutex
+}
+
+func (fake *FakeVerifierImplementation) CheckBuilder(arg1 context.Context, arg2 *slsa.VerificationOptions, arg3 *builders.Registry, arg4 attestation.Statement) (*slsa.ControlResult, error) {
+	fake.checkBuilderMutex.Lock()
+	ret, specificReturn := fake.checkBuilderReturnsOnCall[len(fake.checkBuilderArgsForCall)]
+	fake.checkBuilderArgsForCall = append(fake.checkBuilderArgsForCall, struct {
+		arg1 context.Context
+		arg2 *slsa.VerificationOptions
+		arg3 *builders.Registry
+		arg4 attestation.Statement
+	}{arg1, arg2, arg3, arg4})
+	stub := fake.CheckBuilderStub
+	fakeReturns := fake.checkBuilderReturns
+	fake.recordInvocation("CheckBuilder", []interface{}{arg1, arg2, arg3, arg4})
+	fake.checkBuilderMutex.Unlock()
+	if stub != nil {
+		return stub(arg1, arg2, arg3, arg4)
+	}
+	if specificReturn {
+		return ret.result1, ret.result2
+	}
+	return fakeReturns.result1, fakeReturns.result2
+}
+
+func (fake *FakeVerifierImplementation) CheckBuilderCallCount() int {
+	fake.checkBuilderMutex.RLock()
+	defer fake.checkBuilderMutex.RUnlock()
+	return len(fake.checkBuilderArgsForCall)
+}
+
+func (fake *FakeVerifierImplementation) CheckBuilderCalls(stub func(context.Context, *slsa.VerificationOptions, *builders.Registry, attestation.Statement) (*slsa.ControlResult, error)) {
+	fake.checkBuilderMutex.Lock()
+	defer fake.checkBuilderMutex.Unlock()
+	fake.CheckBuilderStub = stub
+}
+
+func (fake *FakeVerifierImplementation) CheckBuilderArgsForCall(i int) (context.Context, *slsa.VerificationOptions, *builders.Registry, attestation.Statement) {
+	fake.checkBuilderMutex.RLock()
+	defer fake.checkBuilderMutex.RUnlock()
+	argsForCall := fake.checkBuilderArgsForCall[i]
+	return argsForCall.arg1, argsForCall.arg2, argsForCall.arg3, argsForCall.arg4
+}
+
+func (fake *FakeVerifierImplementation) CheckBuilderReturns(result1 *slsa.ControlResult, result2 error) {
+	fake.checkBuilderMutex.Lock()
+	defer fake.checkBuilderMutex.Unlock()
+	fake.CheckBuilderStub = nil
+	fake.checkBuilderReturns = struct {
+		result1 *slsa.ControlResult
+		result2 error
+	}{result1, result2}
+}
+
+func (fake *FakeVerifierImplementation) CheckBuilderReturnsOnCall(i int, result1 *slsa.ControlResult, result2 error) {
+	fake.checkBuilderMutex.Lock()
+	defer fake.checkBuilderMutex.Unlock()
+	fake.CheckBuilderStub = nil
+	if fake.checkBuilderReturnsOnCall == nil {
+		fake.checkBuilderReturnsOnCall = make(map[int]struct {
+			result1 *slsa.ControlResult
+			result2 error
+		})
+	}
+	fake.checkBuilderReturnsOnCall[i] = struct {
+		result1 *slsa.ControlResult
+		result2 error
+	}{result1, result2}
 }
 
 func (fake *FakeVerifierImplementation) CheckIdentities(arg1 context.Context, arg2 *slsa.VerificationOptions, arg3 attestation.Statement) error {

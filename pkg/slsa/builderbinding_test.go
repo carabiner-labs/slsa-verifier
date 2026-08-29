@@ -1,0 +1,222 @@
+// SPDX-FileCopyrightText: Copyright 2026 Carabiner Systems, Inc
+// SPDX-License-Identifier: Apache-2.0
+
+package slsa_test
+
+import (
+	"context"
+	"testing"
+
+	"github.com/carabiner-dev/attestation"
+	sapi "github.com/carabiner-dev/signer/api/v1"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/carabiner-labs/slsa-verifier/pkg/slsa"
+	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/builders"
+)
+
+const (
+	githubIssuer     = "https://token.actions.githubusercontent.com"
+	generatorSubject = "https://github.com/slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@refs/tags/v1.2.2"
+	goBuilderMain    = "https://github.com/slsa-framework/slsa-github-generator/.github/workflows/builder_go_slsa3.yml@refs/heads/main"
+	delegatorSubject = "https://github.com/slsa-framework/slsa-github-generator/.github/workflows/delegator_generic_slsa3.yml@refs/tags/v2.0.0"
+	trwSubject       = "https://github.com/slsa-framework/example-trw/.github/workflows/builder_high-perms_slsa3.yml@refs/tags/v1.10.0"
+	bcrSubject       = "https://github.com/bazel-contrib/publish-to-bcr/.github/workflows/publish.yaml@refs/tags/v0.0.1"
+)
+
+// signedAs wraps a fixture statement with a synthetic verification record.
+type signedAs struct {
+	attestation.Statement
+	verification *sapi.Verification
+}
+
+func (s *signedAs) GetVerification() attestation.Verification { return s.verification }
+
+func verifiedBy(ids ...*sapi.Identity) *sapi.Verification {
+	return &sapi.Verification{Signature: &sapi.SignatureVerification{
+		Verified: true, Status: sapi.VerificationStatus_VERIFIED, Identities: ids,
+	}}
+}
+
+func githubIdentity(subject, sourceRepo string) *sapi.Identity {
+	return &sapi.Identity{Sigstore: &sapi.IdentitySigstore{Issuer: githubIssuer, Identity: subject, SourceRepositoryUri: sourceRepo}}
+}
+
+func googleIdentity(email string) *sapi.Identity {
+	return &sapi.Identity{Sigstore: &sapi.IdentitySigstore{Issuer: "https://accounts.google.com", Identity: email}}
+}
+
+// TestBuilderBinding runs the builder binding over real generator
+// provenance with synthetic signatures: the builder signing its own
+// provenance passes, everything else that is signed fails, and an
+// unsigned statement is a skip.
+func TestBuilderBinding(t *testing.T) {
+	t.Parallel()
+	v, err := slsa.New()
+	require.NoError(t, err)
+
+	for _, tc := range []struct {
+		name         string
+		fixture      string
+		verification *sapi.Verification
+		source       string // expected_source param; empty leaves it unset
+		want         slsa.Status
+		wantMessage  string
+	}{
+		{
+			name: "generator signed its provenance", fixture: "gha-generic-v02-tag.intoto.json",
+			verification: verifiedBy(githubIdentity(generatorSubject, "https://github.com/asraa/slsa-on-github-test")),
+			source:       "github.com/asraa/slsa-on-github-test", want: slsa.StatusPass, wantMessage: "signed by",
+		},
+		{
+			name: "generator signed, no source expectation", fixture: "gha-generic-v02-tag.intoto.json",
+			verification: verifiedBy(githubIdentity(generatorSubject, "https://github.com/asraa/slsa-on-github-test")),
+			want:         slsa.StatusPass,
+		},
+		{
+			name: "generator signed at another release", fixture: "gha-generic-v02-tag.intoto.json",
+			verification: verifiedBy(githubIdentity("https://github.com/slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@refs/tags/v1.2.3", "")),
+			want:         slsa.StatusFail, wantMessage: `signed by it at "refs/tags/v1.2.3"`,
+		},
+		{
+			name: "signed by another workflow", fixture: "gha-generic-v02-tag.intoto.json",
+			verification: verifiedBy(githubIdentity("https://github.com/evil/repo/.github/workflows/build.yml@refs/heads/main", "https://github.com/evil/repo")),
+			want:         slsa.StatusFail, wantMessage: "https://github.com/evil/repo/.github/workflows/build.yml",
+		},
+		{
+			name: "signed by a person", fixture: "gha-generic-v02-tag.intoto.json",
+			verification: verifiedBy(googleIdentity("user@example.com")),
+			want:         slsa.StatusFail, wantMessage: "not its signer",
+		},
+		{
+			name: "certificate from another source repository", fixture: "gha-generic-v02-tag.intoto.json",
+			verification: verifiedBy(githubIdentity(generatorSubject, "https://github.com/evil/repo")),
+			source:       "github.com/asraa/slsa-on-github-test", want: slsa.StatusFail, wantMessage: "not the expected source",
+		},
+		{
+			name: "builder ran from a branch", fixture: "gha-go-v02-branch.intoto.json",
+			verification: verifiedBy(githubIdentity(goBuilderMain, "https://github.com/slsa-framework/example-package")),
+			want:         slsa.StatusFail, wantMessage: "not a release tag",
+		},
+		{
+			name: "delegator signed for a custom builder", fixture: "gha-delegator-v1-tag.intoto.json",
+			verification: verifiedBy(githubIdentity(delegatorSubject, "https://github.com/slsa-framework/example-package")),
+			source:       "github.com/slsa-framework/example-package", want: slsa.StatusPass, wantMessage: "delegator",
+		},
+		{
+			name: "custom builder signed its own provenance", fixture: "gha-delegator-v1-tag.intoto.json",
+			verification: verifiedBy(githubIdentity(trwSubject, "https://github.com/slsa-framework/example-package")),
+			want:         slsa.StatusPass,
+		},
+		{
+			name: "GitHub attestation signed by its workflow", fixture: "github-attestation-v1-branch.intoto.json",
+			verification: verifiedBy(githubIdentity(bcrSubject, "https://github.com/aspect-build/rules_lint")),
+			source:       "https://github.com/aspect-build/rules_lint", want: slsa.StatusPass,
+		},
+		{
+			name: "GitHub attestation signed by another workflow", fixture: "github-attestation-v1-branch.intoto.json",
+			verification: verifiedBy(githubIdentity("https://github.com/aspect-build/rules_lint/.github/workflows/release.yml@refs/heads/main", "https://github.com/aspect-build/rules_lint")),
+			want:         slsa.StatusFail, wantMessage: "builder.id is",
+		},
+		{
+			name: "second signer binds", fixture: "gha-generic-v02-tag.intoto.json",
+			verification: verifiedBy(googleIdentity("user@example.com"), githubIdentity(generatorSubject, "")),
+			want:         slsa.StatusPass,
+		},
+		{
+			name: "unsigned", fixture: "gha-generic-v02-tag.intoto.json",
+			verification: nil, want: slsa.StatusSkipped, wantMessage: "no verified signature",
+		},
+		{
+			name: "signature did not verify", fixture: "gha-generic-v02-tag.intoto.json",
+			verification: &sapi.Verification{Signature: &sapi.SignatureVerification{Verified: false, Status: sapi.VerificationStatus_FAILED, Identities: []*sapi.Identity{githubIdentity(generatorSubject, "")}}},
+			want:         slsa.StatusSkipped,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			stmt := &signedAs{Statement: loadFixture(t, tc.fixture), verification: tc.verification}
+			opts := []slsa.VerificationOption{
+				slsa.WithParam("trusted_builders", []string{"unused"}),
+				slsa.WithSkipBuildTypeChecks(true),
+			}
+			if tc.source != "" {
+				opts = append(opts, slsa.WithParam("expected_source", tc.source))
+			}
+			res, err := v.Verify(context.Background(), stmt, opts...)
+			require.NoError(t, err)
+			cr := coreResult(t, res, slsa.BuilderBindingControlID)
+			assert.Equal(t, tc.want, cr.Status, cr.Message)
+			assert.Equal(t, 2, cr.SLSALevel)
+			if tc.wantMessage != "" {
+				assert.Contains(t, cr.Message, tc.wantMessage)
+			}
+			if tc.want == slsa.StatusFail {
+				assert.Equal(t, slsa.StatusFail, res.Status)
+				assert.Less(t, res.SLSALevel, 2, "a failed binding caps the level below L2")
+			}
+		})
+	}
+}
+
+// A builder the registry does not know, signed by an identity no known
+// builder uses, is refused unless unbound builders are allowed, and
+// binds once the caller registers its signer.
+func TestBuilderBindingUnbound(t *testing.T) {
+	t.Parallel()
+	v, err := slsa.New()
+	require.NoError(t, err)
+	stmt := &signedAs{Statement: loadFixture(t, "v1-build.intoto.json"), verification: verifiedBy(googleIdentity("user@example.com"))}
+	params := []slsa.VerificationOption{
+		slsa.WithParam("expected_source", "git+https://example.com/repo"),
+		slsa.WithParam("trusted_builders", []string{"https://example.com/builder"}),
+	}
+
+	_, err = v.Verify(context.Background(), stmt, params...)
+	require.ErrorIs(t, err, slsa.ErrBuilderUnbound)
+	assert.Contains(t, err.Error(), "https://example.com/builder")
+	assert.Contains(t, err.Error(), "user@example.com")
+
+	res, err := v.Verify(context.Background(), stmt, append(params, slsa.WithAllowUnboundBuilder(true))...)
+	require.NoError(t, err)
+	cr := coreResult(t, res, slsa.BuilderBindingControlID)
+	assert.Equal(t, slsa.StatusSkipped, cr.Status)
+	assert.Contains(t, cr.Message, "unproven")
+	assert.Equal(t, slsa.StatusPass, res.Status)
+
+	registry, err := builders.LoadEmbedded()
+	require.NoError(t, err)
+	binding, err := builders.ParseBinding("https://example.com/builder=sigstore::https://accounts.google.com::user@example.com")
+	require.NoError(t, err)
+	require.NoError(t, registry.Add(binding))
+	bound, err := slsa.New(slsa.WithBuilders(registry))
+	require.NoError(t, err)
+	res, err = bound.Verify(context.Background(), stmt, params...)
+	require.NoError(t, err)
+	cr = coreResult(t, res, slsa.BuilderBindingControlID)
+	assert.Equal(t, slsa.StatusPass, cr.Status, cr.Message)
+	assert.Equal(t, 3, res.SLSALevel)
+
+	// The bound builder signed by someone else is a failure, not unbound.
+	other := &signedAs{Statement: loadFixture(t, "v1-build.intoto.json"), verification: verifiedBy(googleIdentity("other@example.com"))}
+	res, err = bound.Verify(context.Background(), other, params...)
+	require.NoError(t, err)
+	assert.Equal(t, slsa.StatusFail, coreResult(t, res, slsa.BuilderBindingControlID).Status)
+}
+
+// Source provenance names no builder, so there is nothing to bind.
+func TestBuilderBindingSkipsStatementsWithoutBuilder(t *testing.T) {
+	t.Parallel()
+	v, err := slsa.New()
+	require.NoError(t, err)
+	stmt := &signedAs{Statement: loadFixture(t, "source.intoto.json"), verification: verifiedBy(googleIdentity("user@example.com"))}
+	res, err := v.Verify(context.Background(), stmt,
+		slsa.WithParam("expected_source_repo", "https://github.com/example/repo"),
+		slsa.WithParam("expected_branch", "refs/heads/main"),
+	)
+	require.NoError(t, err)
+	for _, cr := range res.CoreResults {
+		assert.NotEqual(t, slsa.BuilderBindingControlID, cr.ID)
+	}
+}

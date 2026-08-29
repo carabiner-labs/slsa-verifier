@@ -16,6 +16,7 @@ import (
 	intoto "github.com/in-toto/attestation/go/v1"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/builders"
 	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/controls"
 	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/eval"
 	"github.com/carabiner-labs/slsa-verifier/pkg/subject"
@@ -57,6 +58,11 @@ type VerifierImplementation interface {
 	// Returns one match per expected subject, in order, so callers can
 	// report each; an empty list when nothing was asked.
 	CheckSubjects(ctx context.Context, opts *VerificationOptions, statement attestation.Statement) ([]subject.Match, error)
+
+	// CheckBuilder binds the provenance's builder.id to the statement's
+	// verified signer using the builder registry and reports the outcome
+	// as a core control result; nil for statements without a builder.
+	CheckBuilder(ctx context.Context, opts *VerificationOptions, registry *builders.Registry, statement attestation.Statement) (*ControlResult, error)
 
 	// ResolveCategory selects which catalog category to apply by looking
 	// up the statement's predicate-type track in the catalog (layer 3

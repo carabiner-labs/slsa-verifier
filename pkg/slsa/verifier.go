@@ -3,6 +3,10 @@
 
 package slsa
 
+// The predicate package is imported for its init: it registers the
+// SLSA-only predicate parsers as the collector's global registry so
+// envelope/statement parsing only recognises SLSA build and source
+// predicate types.
 import (
 	"context"
 	"fmt"
@@ -10,11 +14,9 @@ import (
 
 	"github.com/carabiner-dev/attestation"
 
+	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/builders"
 	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/controls"
-	// Imported for its init: registers the SLSA-only predicate parsers as
-	// the collector's global registry so envelope/statement parsing only
-	// recognises SLSA build and source predicate types.
-	_ "github.com/carabiner-labs/slsa-verifier/pkg/slsa/predicate"
+	_ "github.com/carabiner-labs/slsa-verifier/pkg/slsa/predicate" // registers the SLSA-only predicate parsers
 	"github.com/carabiner-labs/slsa-verifier/pkg/subject"
 )
 
@@ -50,6 +52,13 @@ func New(opts ...Option) (*Verifier, error) {
 			return nil, fmt.Errorf("loading embedded catalog: %w", err)
 		}
 		v.Options.Catalog = cat
+	}
+	if v.Options.Builders == nil {
+		reg, err := builders.LoadEmbedded()
+		if err != nil {
+			return nil, fmt.Errorf("loading embedded builder registry: %w", err)
+		}
+		v.Options.Builders = reg
 	}
 	return v, nil
 }
@@ -100,6 +109,17 @@ func (v *Verifier) Verify(ctx context.Context, statement attestation.Statement, 
 	coreResults, err := v.impl.RunControls(ctx, &vopts, coreCtrls, statement)
 	if err != nil {
 		return nil, fmt.Errorf("running core controls: %w", err)
+	}
+
+	// Layer 4b: bind the builder the provenance names to the identity
+	// that signed it. The outcome joins the core roster: signed by the
+	// builder is what SLSA Build L2 asks of provenance.
+	binding, err := v.impl.CheckBuilder(ctx, &vopts, v.Options.Builders, statement)
+	if err != nil {
+		return nil, fmt.Errorf("binding builder to signer: %w", err)
+	}
+	if binding != nil {
+		coreResults = append(coreResults, binding)
 	}
 
 	// Layer 5: select and run buildType controls (optional).
