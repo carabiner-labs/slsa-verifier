@@ -93,6 +93,7 @@ func (e *Evaluator) Evaluate(
 //   - subjects:  list of in-toto ResourceDescriptor.
 //   - params:    map<string, dyn> for caller-supplied check parameters.
 //   - semverMatches(expected, tag): see VersionedTagMatches.
+//   - repoMatches(expected, source): see RepoMatches.
 //   - CEL optional types, for fields a producer may omit.
 func buildEnv(predicate proto.Message) (*cel.Env, error) {
 	predicateName := string(predicate.ProtoReflect().Descriptor().FullName())
@@ -110,5 +111,6 @@ func buildEnv(predicate proto.Message) (*cel.Env, error) {
 		cel.Variable("subjects", cel.ListType(cel.ObjectType(subjectName))),
 		cel.Variable("params", cel.MapType(cel.StringType, cel.DynType)),
 		semverMatchesFunction(),
+		repoMatchesFunction(),
 	)
 }

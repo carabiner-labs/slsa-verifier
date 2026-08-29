@@ -886,3 +886,66 @@ func TestGitHubBuildTypeControlsRequireAnExpectation(t *testing.T) {
 		assert.Contains(t, err.Error(), p)
 	}
 }
+
+// coreResult returns the core-layer result for control id.
+func coreResult(t *testing.T, res *slsa.Result, id string) *slsa.ControlResult {
+	t.Helper()
+	for _, cr := range res.CoreResults {
+		if cr.ID == id {
+			return cr
+		}
+	}
+	require.Failf(t, "control missing", "no core result %q in %+v", id, res.CoreResults)
+	return nil
+}
+
+// TestSourceRepoMatchAcrossGenerators checks source-repo-match finds the
+// repository wherever each generator recorded it: the BYOB delegator
+// (resolvedDependencies), GitHub artifact attestations
+// (workflow.repository and resolvedDependencies), the v0.2 generators
+// (configSource) and the synthetic fixtures (externalParameters.source,
+// configSource over materials, and v0.1 materials) — with the
+// expectation spelled with or without a scheme, and refused when it
+// carries a ref.
+func TestSourceRepoMatchAcrossGenerators(t *testing.T) {
+	t.Parallel()
+
+	v, err := slsa.New()
+	require.NoError(t, err)
+
+	for _, tc := range []struct {
+		name     string
+		fixture  string
+		expected string
+		want     slsa.Status
+	}{
+		{name: "delegator BYOB, scheme-less", fixture: "gha-delegator-v1-tag.intoto.json", expected: "github.com/slsa-framework/example-package", want: slsa.StatusPass},
+		{name: "delegator BYOB, https", fixture: "gha-delegator-v1-tag.intoto.json", expected: "https://github.com/slsa-framework/example-package", want: slsa.StatusPass},
+		{name: "delegator BYOB, git+https", fixture: "gha-delegator-v1-tag.intoto.json", expected: "git+https://github.com/slsa-framework/example-package", want: slsa.StatusPass},
+		{name: "delegator BYOB, other repository", fixture: "gha-delegator-v1-tag.intoto.json", expected: "github.com/slsa-framework/other", want: slsa.StatusFail},
+		{name: "GitHub attestation", fixture: "github-attestation-v1-branch.intoto.json", expected: "https://github.com/aspect-build/rules_lint", want: slsa.StatusPass},
+		{name: "GitHub attestation, other repository", fixture: "github-attestation-v1-branch.intoto.json", expected: "https://github.com/aspect-build/rules_go", want: slsa.StatusFail},
+		{name: "v0.2 generic generator", fixture: "gha-generic-v02-tag.intoto.json", expected: "github.com/asraa/slsa-on-github-test", want: slsa.StatusPass},
+		{name: "v0.2 go builder", fixture: "gha-go-v02-branch.intoto.json", expected: "github.com/slsa-framework/example-package", want: slsa.StatusPass},
+		{name: "v0.2 go builder, other repository", fixture: "gha-go-v02-branch.intoto.json", expected: "github.com/slsa-framework/example-package-fork", want: slsa.StatusFail},
+		{name: "v1 externalParameters.source", fixture: "v1-build.intoto.json", expected: "example.com/repo", want: slsa.StatusPass},
+		{name: "v0.2 configSource wins over materials", fixture: "v02-build.intoto.json", expected: "example.com/dep", want: slsa.StatusFail},
+		{name: "v0.1 materials", fixture: "v01-build.intoto.json", expected: "example.com/repo", want: slsa.StatusPass},
+		{name: "expectation with a ref is an error", fixture: "gha-delegator-v1-tag.intoto.json", expected: "github.com/slsa-framework/example-package@refs/tags/v13.0.30", want: slsa.StatusError},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			res, err := v.Verify(context.Background(), loadFixture(t, tc.fixture),
+				slsa.WithParam("expected_source", tc.expected),
+				slsa.WithParam("trusted_builders", []string{"unused"}),
+				slsa.WithSkipBuildTypeChecks(true),
+			)
+			require.NoError(t, err)
+			cr := coreResult(t, res, "source-repo-match")
+			assert.Equal(t, tc.want, cr.Status, "%s: %s", cr.ID, cr.Message)
+			if tc.want == slsa.StatusError {
+				assert.Contains(t, cr.Message, "must not carry a ref")
+			}
+		})
+	}
+}

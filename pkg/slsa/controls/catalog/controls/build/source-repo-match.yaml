@@ -5,25 +5,43 @@ track: build
 id: source-repo-match
 title: Source Repository Matches Expected URI
 description: |
-  Asserts that the build provenance's source matches the expected source
-  repository URI.
+  Asserts that the build provenance's source is the expected repository,
+  given as expected_source. The expectation names a repository without a
+  ref — github.com/org/repo, https://github.com/org/repo or
+  git+https://github.com/org/repo all mean the same one — and is compared
+  with repoMatches, which drops the ref generators append to the
+  recorded URI (…@refs/heads/main). Passing a ref as expected_source is
+  an error: branches and tags have their own expectations.
 
-  Per-version field paths:
-    - v1.0: predicate.buildDefinition.externalParameters.source
-    - v0.2: predicate.invocation.configSource.uri
-    - v0.1: any predicate.materials[*].uri matches (v0.1 has no
-      dedicated source-config field, so we accept the URI appearing
-      anywhere in the materials list).
+  Generators record the source in different places, so each version
+  reads the first of these that is present:
+    - v1.0: buildDefinition.externalParameters.source (a URI or a
+      resource descriptor), then resolvedDependencies[0].uri (how the
+      slsa-github-generator BYOB builders record the checked-out repo),
+      then externalParameters.workflow.repository (GitHub's artifact
+      attestations).
+    - v0.2: invocation.configSource.uri, then materials[0].uri.
+    - v0.1: any materials[*].uri (v0.1 has no dedicated source field, so
+      the repository may appear anywhere in the materials list).
 checks:
   - predicateType: https://slsa.dev/provenance/v1
-    expression: predicate.buildDefinition.externalParameters.source == params.expected_source
+    expression: >-
+      repoMatches(string(params.expected_source),
+        predicate.buildDefinition.externalParameters.?source
+          .or(predicate.buildDefinition.resolvedDependencies[?0].?uri)
+          .or(predicate.buildDefinition.externalParameters.?workflow.?repository)
+          .orValue(""))
     parameters:
       - expected_source
   - predicateType: https://slsa.dev/provenance/v0.2
-    expression: predicate.invocation.configSource.uri == params.expected_source
+    expression: >-
+      repoMatches(string(params.expected_source),
+        optional.ofNonZeroValue(predicate.?invocation.?configSource.?uri.orValue(""))
+          .or(predicate.materials[?0].?uri)
+          .orValue(""))
     parameters:
       - expected_source
   - predicateType: https://slsa.dev/provenance/v0.1
-    expression: predicate.materials.exists(m, m.uri == params.expected_source)
+    expression: predicate.materials.exists(m, repoMatches(string(params.expected_source), m.uri))
     parameters:
       - expected_source
