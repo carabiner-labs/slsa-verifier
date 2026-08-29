@@ -23,6 +23,7 @@ const (
 	delegatorSubject = "https://github.com/slsa-framework/slsa-github-generator/.github/workflows/delegator_generic_slsa3.yml@refs/tags/v2.0.0"
 	trwSubject       = "https://github.com/slsa-framework/example-trw/.github/workflows/builder_high-perms_slsa3.yml@refs/tags/v1.10.0"
 	bcrSubject       = "https://github.com/bazel-contrib/publish-to-bcr/.github/workflows/publish.yaml@refs/tags/v0.0.1"
+	bndRelease       = "https://github.com/carabiner-dev/bnd/.github/workflows/release.yaml@refs/tags/v0.4.4"
 )
 
 // signedAs wraps a fixture statement with a synthetic verification record.
@@ -117,6 +118,18 @@ func TestBuilderBinding(t *testing.T) {
 		{
 			name: "GitHub attestation signed by another workflow", fixture: "github-attestation-v1-branch.intoto.json",
 			verification: verifiedBy(githubIdentity("https://github.com/aspect-build/rules_lint/.github/workflows/release.yml@refs/heads/main", "https://github.com/aspect-build/rules_lint")),
+			want:         slsa.StatusFail, wantMessage: "builder.id is",
+		},
+		{
+			// tejolote names the builder at the commit it ran from, the
+			// certificate at the tag: the same workflow, not a mismatch.
+			name: "builder named at a commit, signed at the tag", fixture: "tejolote-v1-tag.intoto.json",
+			verification: verifiedBy(githubIdentity(bndRelease, "https://github.com/carabiner-dev/bnd")),
+			source:       "github.com/carabiner-dev/bnd", want: slsa.StatusPass,
+		},
+		{
+			name: "builder named at a commit, signed by another workflow", fixture: "tejolote-v1-tag.intoto.json",
+			verification: verifiedBy(githubIdentity("https://github.com/carabiner-dev/bnd/.github/workflows/tests.yaml@refs/tags/v0.4.4", "https://github.com/carabiner-dev/bnd")),
 			want:         slsa.StatusFail, wantMessage: "builder.id is",
 		},
 		{

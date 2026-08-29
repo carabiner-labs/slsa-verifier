@@ -145,7 +145,12 @@ func bindBuilder(registry *builders.Registry, known *builders.Builder, builderID
 			return &ControlResult{Status: StatusFail, Message: fmt.Sprintf(
 				"builder.id is %q but the statement was signed by %s (%s)", builderID, principal, entry.Title)}
 		}
-		if builderRef != "" && signerRef != "" && builderRef != signerRef {
+		// Some generators name the builder at the commit it ran from
+		// (…/release.yaml@<sha>) rather than at the ref the certificate
+		// carries; a commit cannot be compared with a ref, and the
+		// certificate records no commit to compare it with yet, so
+		// only refs are compared.
+		if builderRef != "" && signerRef != "" && builderRef != signerRef && !isCommitDigest(builderRef) {
 			return &ControlResult{Status: StatusFail, Message: fmt.Sprintf(
 				"builder.id names the builder at %q but the statement was signed by it at %q", builderRef, signerRef)}
 		}
@@ -169,6 +174,20 @@ func bindBuilder(registry *builders.Registry, known *builders.Builder, builderID
 		msg += ", a delegator: builder.id names the delegated builder"
 	}
 	return &ControlResult{Status: StatusPass, Message: msg}
+}
+
+// isCommitDigest reports whether s is a git commit digest (SHA-1 or
+// SHA-256 hex) rather than a ref name.
+func isCommitDigest(s string) bool {
+	if len(s) != 40 && len(s) != 64 {
+		return false
+	}
+	for _, c := range s {
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
+			return false
+		}
+	}
+	return true
 }
 
 // isExpectedSigner reports whether signer matches one of the caller's

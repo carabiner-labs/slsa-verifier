@@ -929,6 +929,7 @@ func TestSourceRepoMatchAcrossGenerators(t *testing.T) {
 		{name: "v0.2 go builder", fixture: "gha-go-v02-branch.intoto.json", expected: "github.com/slsa-framework/example-package", want: slsa.StatusPass},
 		{name: "v0.2 go builder, other repository", fixture: "gha-go-v02-branch.intoto.json", expected: "github.com/slsa-framework/example-package-fork", want: slsa.StatusFail},
 		{name: "v1 externalParameters.source", fixture: "v1-build.intoto.json", expected: "example.com/repo", want: slsa.StatusPass},
+		{name: "tejolote release provenance", fixture: "tejolote-v1-tag.intoto.json", expected: "github.com/carabiner-dev/bnd", want: slsa.StatusPass},
 		{name: "v0.2 configSource wins over materials", fixture: "v02-build.intoto.json", expected: "example.com/dep", want: slsa.StatusFail},
 		{name: "v0.1 materials", fixture: "v01-build.intoto.json", expected: "example.com/repo", want: slsa.StatusPass},
 		{name: "expectation with a ref is an error", fixture: "gha-delegator-v1-tag.intoto.json", expected: "github.com/slsa-framework/example-package@refs/tags/v13.0.30", want: slsa.StatusError},

@@ -1,0 +1,81 @@
+{
+  "_type": "https://in-toto.io/Statement/v1",
+  "subject": [
+    {
+      "name": "bnd-v0.4.4-windows-amd64.exe",
+      "digest": {
+        "sha256": "b853b226fd91c91a9d735ceee7fb564928e49aac1f728d5284408bd282dc4292"
+      }
+    },
+    {
+      "name": "carabiner-dev-bnd-golang-dist-proxy-release.spdx.json",
+      "digest": {
+        "sha256": "031eafe54b301d189fa091c9bbf315027546d7dfdee020eaac97aa1b5862b8cb"
+      }
+    },
+    {
+      "name": "carabiner-dev-bnd.spdx.json",
+      "digest": {
+        "sha256": "8caff2acc33109452a8ce0d54d716269170fcfee43fcc9cbe5f2a17c1ce030bf"
+      }
+    },
+    {
+      "name": "bnd-v0.4.4-darwin-arm64",
+      "digest": {
+        "sha256": "c096db1c00cf3089fba94b5df021bd4b394c304edf6c643b27c8742772eeb99d"
+      }
+    },
+    {
+      "name": "bnd-v0.4.4-linux-amd64",
+      "digest": {
+        "sha256": "37190a971de910808d6a1cbaae22e2cd5ec5ad22c5f124cb60ad015574724a25"
+      }
+    },
+    {
+      "name": "bnd-v0.4.4-linux-arm64",
+      "digest": {
+        "sha256": "6dd747a728c75ed47877a0c9e6a2c30ff7745ffdcef891bcdb78405711c2c943"
+      }
+    }
+  ],
+  "predicateType": "https://slsa.dev/provenance/v1",
+  "predicate": {
+    "buildDefinition": {
+      "buildType": "https://actions.github.io/buildtypes/workflow/v1",
+      "externalParameters": {
+        "entryPoint": ".github/workflows/release.yaml",
+        "source": "git+https://github.com/carabiner-dev/bnd@8343d1b22a4a2ed43e2afad4fb8a2b9f2145749e",
+        "workflow": {
+          "path": ".github/workflows/release.yaml",
+          "repository": "https://github.com/carabiner-dev/bnd"
+        }
+      },
+      "internalParameters": {
+        "github": {
+          "event_name": "push",
+          "repository_id": "925016673",
+          "repository_owner_id": "193936921",
+          "runner_environment": "github-hosted"
+        }
+      },
+      "resolvedDependencies": [
+        {
+          "digest": {
+            "sha1": "8343d1b22a4a2ed43e2afad4fb8a2b9f2145749e"
+          },
+          "uri": "git+ssh://github.com/carabiner-dev/bnd@8343d1b22a4a2ed43e2afad4fb8a2b9f2145749e"
+        }
+      ]
+    },
+    "runDetails": {
+      "builder": {
+        "id": "https://github.com/carabiner-dev/bnd/.github/workflows/release.yaml@8343d1b22a4a2ed43e2afad4fb8a2b9f2145749e"
+      },
+      "metadata": {
+        "finishedOn": "2026-07-18T01:36:40Z",
+        "invocationId": "https://github.com/carabiner-dev/bnd/actions/runs/29625524645/attempts/1",
+        "startedOn": "2026-07-18T01:36:35Z"
+      }
+    }
+  }
+}
