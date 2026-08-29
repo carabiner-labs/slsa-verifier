@@ -7,6 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strconv"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -38,6 +40,16 @@ type buildOptions struct {
 	// not set instead of refusing to run (--skip-buildtype-checks).
 	SkipBuildTypeChecks bool
 
+	// Level is the raw --level flag: the SLSA build level the
+	// attestation is required to reach, as a bare number or a
+	// SLSA_BUILD_LEVEL_N string. Parsed into MinLevel by Validate.
+	Level string
+
+	// MinLevel is the parsed required level. With it set, controls
+	// above it are informative: they cap the computed level without
+	// failing the run. Zero requires every applicable control to pass.
+	MinLevel int
+
 	// Spec is the SLSA spec version whose criteria the attestation is
 	// verified against, empty means the latest the catalog defines.
 	Spec string
@@ -58,6 +70,11 @@ func (o *buildOptions) AddFlags(cmd *cobra.Command) {
 		&o.SkipBuildTypeChecks, "skip-buildtype-checks", false,
 		"skip the buildType-specific checks whose parameters were not set, instead of "+
 			"refusing to run until at least one of them is",
+	)
+	cmd.PersistentFlags().StringVar(
+		&o.Level, "level", "0",
+		"required SLSA build level, 1-3 (eg 2 or SLSA_BUILD_LEVEL_2); controls above it are "+
+			"informative and only cap the computed level. 0 requires every applicable control to pass",
 	)
 	cmd.PersistentFlags().StringVar(
 		&o.Spec, "spec", "",
@@ -83,12 +100,35 @@ func (o *buildOptions) Validate() error {
 	if err := checkAttestationPath(o.AttestationPath); err != nil {
 		errs = append(errs, err)
 	}
+	level, err := parseBuildLevel(o.Level)
+	if err != nil {
+		errs = append(errs, err)
+	}
+	o.MinLevel = level
 	// --signer implies --require-signatures: matching an identity on an
 	// unsigned statement is meaningless.
 	if len(o.Signers) > 0 {
 		o.shared.RequireSignatures = true
 	}
 	return errors.Join(errs...)
+}
+
+const maxBuildLevel = 3
+
+// parseBuildLevel parses a --level value: a bare number or a
+// SLSA_BUILD_LEVEL_N string; 0 and the empty string mean no minimum.
+func parseBuildLevel(value string) (int, error) {
+	if strings.TrimSpace(value) == "" {
+		return 0, nil
+	}
+	trimmed := strings.TrimPrefix(
+		strings.ToUpper(strings.TrimSpace(value)), "SLSA_BUILD_LEVEL_",
+	)
+	level, err := strconv.Atoi(trimmed)
+	if err != nil || level < 0 || level > maxBuildLevel {
+		return 0, fmt.Errorf("invalid build level %q (want 0-%d or SLSA_BUILD_LEVEL_N)", value, maxBuildLevel)
+	}
+	return level, nil
 }
 
 // addBuild registers the build subcommand on parentCmd.
@@ -214,6 +254,7 @@ func runBuild(cmd *cobra.Command, opts *buildOptions) error {
 		slsa.WithUserControlList(opts.Controls),
 		slsa.WithTrack(controls.TrackBuild),
 		slsa.WithSpecVersion(opts.Spec),
+		slsa.WithMinLevel(opts.MinLevel),
 		slsa.WithVerifierID(opts.VerifierID),
 	)
 	// Signature/identity failures from the verification layer are a
