@@ -273,6 +273,13 @@ func signVSAFor(t *testing.T, dir, name, verifierID string, k signingKey, subjec
 	}
 	payload, err := json.Marshal(statement)
 	require.NoError(t, err)
+	return signDSSE(t, dir, name, payload, k)
+}
+
+// signDSSE writes a DSSE envelope wrapping the in-toto payload, signed
+// by k, and returns its path.
+func signDSSE(t *testing.T, dir, name string, payload []byte, k signingKey) string {
+	t.Helper()
 	const payloadType = "application/vnd.in-toto+json"
 	pae := fmt.Appendf(nil, "DSSEv1 %d %s %d %s", len(payloadType), payloadType, len(payload), payload)
 	digest := sha256.Sum256(pae)

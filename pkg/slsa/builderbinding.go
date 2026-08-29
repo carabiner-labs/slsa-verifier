@@ -20,8 +20,25 @@ import (
 // the registry does not know and was signed by an identity no known
 // builder uses: nothing ties the builder.id claim to the signature.
 // Bind the builder to its signer in the registry, or allow unbound
-// builders with VerificationOptions.AllowUnboundBuilder.
+// builders with VerificationOptions.AllowUnboundBuilder. The error
+// returned is a *BuilderUnboundError.
 var ErrBuilderUnbound = errors.New("builder is not bound to a signing identity")
+
+// BuilderUnboundError says which builder is unbound and who signed the
+// statement instead. It matches ErrBuilderUnbound with errors.Is.
+type BuilderUnboundError struct {
+	BuilderID string
+	// Signers are the principals of the verified signers.
+	Signers []string
+}
+
+func (e *BuilderUnboundError) Error() string {
+	return fmt.Sprintf("builder %q is not bound to a signing identity: the registry knows neither the builder nor its signer %s",
+		e.BuilderID, strings.Join(e.Signers, ", "))
+}
+
+// Is makes the error match ErrBuilderUnbound.
+func (*BuilderUnboundError) Is(target error) bool { return target == ErrBuilderUnbound }
 
 // BuilderBindingControlID identifies the core result of binding the
 // provenance's builder.id to the identity that signed the statement.
@@ -107,9 +124,7 @@ func (*defaultImplementation) CheckBuilder(_ context.Context, opts *Verification
 		principals = append(principals, s.Principal())
 	}
 	if opts == nil || !opts.AllowUnboundBuilder {
-		return nil, fmt.Errorf(
-			"%w: the registry knows neither builder %q nor its signer %s; bind the builder to its signing identity or allow unbound builders",
-			ErrBuilderUnbound, builderID, strings.Join(principals, ", "))
+		return nil, &BuilderUnboundError{BuilderID: builderID, Signers: principals}
 	}
 	cr.Status = StatusSkipped
 	cr.Message = fmt.Sprintf("builder %q is not in the registry and was signed by %s, which no known builder uses: builder.id is unproven",

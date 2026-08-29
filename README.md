@@ -40,12 +40,30 @@ key material; making a result *trustworthy* requires opting in.
   and the controls a source provenance lists are written by whoever
   produced the document. They only mean something once the signer is bound
   to them: for `vsa` the tool refuses an unbound verifier unless you pass
-  `--allow-unbound-verifier`; for `build` and `source`, pass a signer.
+  `--allow-unbound-verifier`; for `build`, a signed attestation's
+  `builder.id` is bound to its signer through the builder registry (the
+  slsa-github-generator builders and GitHub Actions workflows are known;
+  add yours with `--builder <id>=<spec>` or `--builders <file>`) and an
+  unbound builder is refused unless you pass `--allow-unbound-builder`;
+  for `source`, pass a signer.
 - **The VSA it emits summarizes what it checked.** A VSA emitted with
   `--vsa` from an unsigned or unbound input is a summary of an unverified
   document. Only issue VSAs from runs that required and bound signatures.
 
 See [SECURITY.md](SECURITY.md) for how to report a problem.
+
+## Builder registry
+
+A signed build attestation's `builder.id` is proven, not just checked,
+by binding it to the identity that signed the statement. The verifier
+ships a registry of builders and their signers — the slsa-github-generator
+workflows at release tags, and any GitHub Actions workflow signing its own
+provenance — and reports the binding as the `builder-identity-bound`
+control. Builders of your own are bound with `--builder <id>=<signer spec>`
+or a registry file passed with `--builders`; a signed attestation naming a
+builder nothing binds is refused unless you pass `--allow-unbound-builder`.
+[docs/builder-registry.md](docs/builder-registry.md) describes the rules,
+the file format and the embedded entries.
 
 ## Development
 

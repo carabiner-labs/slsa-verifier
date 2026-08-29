@@ -27,6 +27,7 @@ type buildOptions struct {
 	controlsOptions
 	vsaOutputOptions
 	subjectOptions
+	builderOptions
 
 	// AttestationPath is the first positional argument: path to the
 	// attestation file (plain in-toto statement, DSSE envelope, or
@@ -53,6 +54,7 @@ func (o *buildOptions) AddFlags(cmd *cobra.Command) {
 	o.controlsOptions.AddFlags(cmd)
 	o.vsaOutputOptions.AddFlags(cmd)
 	o.subjectOptions.AddFlags(cmd)
+	o.builderOptions.AddFlags(cmd)
 	cmd.PersistentFlags().BoolVar(
 		&o.SkipBuildTypeChecks, "skip-buildtype-checks", false,
 		"skip the buildType-specific checks whose parameters were not set, instead of "+
@@ -77,6 +79,7 @@ func (o *buildOptions) Validate() error {
 		o.controlsOptions.Validate(),
 		o.vsaOutputOptions.Validate(),
 		o.subjectOptions.Validate(),
+		o.builderOptions.Validate(),
 	}
 	if o.AttestationPath == "" {
 		errs = append(errs, errors.New("attestation path is required"))
@@ -113,12 +116,27 @@ sigstore(identityMatch=regex)::<issuer>::<identity-regexp>:
 Artifact files given after the attestation are hashed with the digest
 algorithms its subjects use, and --subject states a digest directly;
 the attestation must be about every one of them or the verification
-fails. Without any, the attestation is verified on its content alone.`,
+fails. Without any, the attestation is verified on its content alone.
+
+A signed attestation's builder.id is bound to the identity that signed
+it through the builder registry, which knows the slsa-github-generator
+builders and any GitHub Actions workflow signing its own provenance.
+A builder the registry does not know, signed by an identity no known
+builder uses, is refused: bind it with --builder <id>=<signer spec>
+(or <id>=<OIDC issuer>, for workflow-style identities whose subject is
+the builder id), load a registry file with --builders, or accept the
+claim unproven with --allow-unbound-builder.`,
 		Use: "build <attestation-path> [artifact...]",
-		Example: fmt.Sprintf(
-			`%s build --param=expected_source:git+https://example.com/repo provenance.intoto.json`,
-			appname,
-		),
+		Example: fmt.Sprintf(`  # Verify provenance from the slsa-github-generator
+  %[1]s build --param expected_source:github.com/example/repo \
+      --param trusted_builders:[https://github.com/slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@refs/tags/v2.1.0] \
+      --param expected_tag:v1.2.3 provenance.intoto.jsonl app.tgz
+
+  # Bind a builder of your own to the identity that signs for it
+  %[1]s build --param expected_source:github.com/example/repo \
+      --param trusted_builders:[https://ci.example.com/builder] \
+      --builder https://ci.example.com/builder=spiffe://example.com/ci/builder \
+      --skip-buildtype-checks provenance.dsse.json`, appname),
 		SilenceUsage:  false,
 		SilenceErrors: true,
 		Args:          cobra.MinimumNArgs(1),
@@ -180,7 +198,11 @@ func runBuild(cmd *cobra.Command, opts *buildOptions) error {
 		return err
 	}
 
-	v, err := slsa.New()
+	var verifierOpts []slsa.Option
+	if reg := opts.Registry(); reg != nil {
+		verifierOpts = append(verifierOpts, slsa.WithBuilders(reg))
+	}
+	v, err := slsa.New(verifierOpts...)
 	if err != nil {
 		return fmt.Errorf("building verifier: %w", err)
 	}
@@ -191,6 +213,7 @@ func runBuild(cmd *cobra.Command, opts *buildOptions) error {
 		slsa.WithSubjects(expected),
 		slsa.WithGitDigestAliases(opts.shared.GitDigestAliases),
 		slsa.WithSkipBuildTypeChecks(opts.SkipBuildTypeChecks),
+		slsa.WithAllowUnboundBuilder(opts.AllowUnbound),
 		slsa.WithParams(opts.shared.Params),
 		slsa.WithRequireSignatures(opts.shared.RequireSignatures),
 		slsa.WithExpectedSigners(opts.Signers),
@@ -213,6 +236,12 @@ func runBuild(cmd *cobra.Command, opts *buildOptions) error {
 	// already says what to set, so surface it as is.
 	if errors.Is(err, slsa.ErrBuildTypeParamsUnset) {
 		return err
+	}
+	// Likewise an unbound builder: say which flags bind it.
+	var unbound *slsa.BuilderUnboundError
+	if errors.As(err, &unbound) {
+		return fmt.Errorf("%w\nbind it with --builder %s=<signer spec or issuer>, load a registry with --builders, "+
+			"or pass --allow-unbound-builder to accept builder.id unproven", err, unbound.BuilderID)
 	}
 	if err != nil {
 		return fmt.Errorf("running verification: %w", err)
