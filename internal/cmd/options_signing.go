@@ -35,8 +35,7 @@ func (so *signingOptions) Config() *command.OptionsSetConfig {
 			Flags: map[string]command.FlagConfig{
 				"signer": {
 					Long: "signer",
-					Help: "expected signer identity as a spec string " +
-						"(OR'ed; implies --require-signatures)",
+					Help: "expected signer identities (spec strings)",
 				},
 			},
 		}

@@ -35,8 +35,7 @@ type subjectOptions struct {
 func (o *subjectOptions) AddFlags(cmd *cobra.Command) {
 	cmd.PersistentFlags().StringArrayVarP(
 		&o.SubjectSpecs, "subject", "s", nil,
-		"expected subject as algorithm:digest, eg sha256:<hex> (repeatable); "+
-			"the attestation must be about every subject and artifact file given",
+		"expected subject as algorithm:digest, eg sha256:<hex> (repeatable)",
 	)
 }
 
@@ -71,7 +70,7 @@ func (o *subjectOptions) expects() bool {
 // resolve returns every expected subject: the artifact files, hashed
 // with the digest algorithms the statement's subjects use, followed by
 // the --subject values. Files cannot be checked against subjects that
-// carry no content digest (gitCommit, dirHash, …): that is an error
+// carry no content digest (gitCommit, dirHash, etc): that is an error
 // naming what the subjects use, not a silent pass.
 func (o *subjectOptions) resolve(stmt attestation.Statement) ([]*subject.Expected, error) {
 	if !o.expects() {

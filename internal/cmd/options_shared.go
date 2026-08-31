@@ -40,9 +40,7 @@ func (so *sharedOptions) AddFlags(cmd *cobra.Command) {
 	)
 	cmd.PersistentFlags().BoolVar(
 		&so.GitDigestAliases, "git-digest-aliases", true,
-		"when matching subjects, treat gitCommit and other git digests as the sha1 or sha256 "+
-			"hash they are, so sha1:<sha> matches gitCommit:<sha> and vice versa; "+
-			"pass --git-digest-aliases=false to require exact algorithm names",
+		"treat gitCommit and other git digests as the hash they are",
 	)
 }
 

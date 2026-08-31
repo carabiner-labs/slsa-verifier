@@ -21,7 +21,7 @@ import (
 
 // vsaOptions composes the flags specific to the vsa subcommand. The
 // shared flags (--key, --param, --require-signatures) come from
-// sharedOptions registered on the root command; --signer comes from
+// sharedOptions registered on the root command. --signer comes from
 // the embedded signingOptions, as on build, and acts as a wildcard
 // signer for every accepted verifier.
 type vsaOptions struct {
@@ -62,7 +62,7 @@ func (o *vsaOptions) AddFlags(cmd *cobra.Command) {
 	o.subjectOptions.AddFlags(cmd)
 	cmd.PersistentFlags().StringArrayVar(
 		&o.VerifierSpecs, "verifier", nil,
-		"accepted verifier.id, optionally bound to a signer as id=<signer spec> (repeatable)",
+		"accepted verifier.id (optionally bound to a signer as id=<signer spec>)",
 	)
 	cmd.PersistentFlags().BoolVar(
 		&o.AllowUnbound, "allow-unbound-verifier", false,
@@ -70,8 +70,7 @@ func (o *vsaOptions) AddFlags(cmd *cobra.Command) {
 	)
 	cmd.PersistentFlags().StringVar(
 		&o.RegistryPath, "verifiers", "",
-		"YAML file or directory binding verifier ids to their signers, merged over the embedded registry; "+
-			"a --verifier given without a signer takes the registry's",
+		"YAML file or directory binding verifier ids to their signers",
 	)
 	cmd.PersistentFlags().StringArrayVar(
 		&o.Levels, "level", nil,
@@ -87,7 +86,7 @@ func (o *vsaOptions) AddFlags(cmd *cobra.Command) {
 	)
 	cmd.PersistentFlags().StringArrayVar(
 		&o.Dependencies, "dependency", nil,
-		"expected dependencyLevels key (repeatable, AND-matched, every entry must appear in the map)",
+		"expected dependencyLevels key (repeatable, every entry must appear)",
 	)
 }
 
@@ -154,7 +153,7 @@ func (o *vsaOptions) Validate() error {
 	}
 	o.Registry = registry
 
-	// A verifier.id is a claim written into the document; only a signer
+	// A verifier.id is a claim written into the document. Only a signer
 	// bound to it makes the match mean anything. Refuse unbound
 	// verifiers unless the user says so explicitly.
 	if !o.AllowUnbound && len(o.Signers) == 0 {
@@ -207,19 +206,20 @@ func addVSA(parentCmd *cobra.Command, shared *sharedOptions) {
 		Short: "Verify a SLSA Verification Summary Attestation (VSA)",
 		Long: `Verify a SLSA Verification Summary Attestation (VSA, v0.2 or v1).
 
-The VSA's envelope signature is verified using --key (and optionally
---require-signatures). The predicate is then converted to a
-version-neutral representation and the following checks run:
+After a VSA's envelope signature is verified (vis sigstore or passing
+--key, yhe predicate is then converted to a version-neutral representation
+and the following checks run:
 
   * verificationResult must be "PASSED" (always enforced)
-  * verifier.id must be one of --verifier (always enforced); a verifier
+  * verifier.id must be one of --verifier (always enforced). A verifier
     given without a signer takes the one a registry file passed with
     --verifiers binds to its id
   * the envelope's verified signer must be authorized for that verifier:
     bound to it with --verifier <id>=<signer spec>, or a wildcard --signer
     (enforced unless --allow-unbound-verifier is given)
-  * verifiedLevels must satisfy one of --level (at-or-above per track; e.g.
-    --level SLSA_BUILD_LEVEL_3 is satisfied by SLSA_BUILD_LEVEL_3 or SLSA_BUILD_LEVEL_4)
+  * verifiedLevels must satisfy one of --level (at-or-above per track
+    eg: --level SLSA_BUILD_LEVEL_3 is satisfied by SLSA_BUILD_LEVEL_3 or
+	SLSA_BUILD_LEVEL_4)
   * resourceUri must equal --resource (if set)
   * policy.uri must equal --policy (if set)
   * dependencyLevels must contain every --dependency key (if any given)

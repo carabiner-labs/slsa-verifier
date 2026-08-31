@@ -31,13 +31,11 @@ type vsaOutputOptions struct {
 func (o *vsaOutputOptions) AddFlags(cmd *cobra.Command) {
 	cmd.PersistentFlags().BoolVar(
 		&o.EmitVSA, "vsa", false,
-		"emit an unsigned Verification Summary Attestation (VSA) with the "+
-			"computed SLSA level to stdout instead of the verification roster",
+		"emit an unsigned Verification Summary Attestation (VSA) with the computed SLSA levels",
 	)
 	cmd.PersistentFlags().StringVar(
 		&o.VerifierID, "verifier-id", defaultVerifierID,
-		"verifier.id to record in the emitted VSA: the identity consumers "+
-			"bind to the key or certificate that signs it",
+		"verifier.id to record in the emitted VSA",
 	)
 }
 

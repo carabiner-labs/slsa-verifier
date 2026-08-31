@@ -122,8 +122,7 @@ func (o *sourceOptions) AddFlags(cmd *cobra.Command) {
 	)
 	cmd.PersistentFlags().StringVarP(
 		&o.SubjectSpec, "subject", "s", "",
-		"commit the attestation must be about, as algorithm:digest (eg gitCommit:<sha>) "+
-			"or a bare 40-character commit sha; may also be given as the second argument",
+		"commit the attestation must be about (eg gitCommit:<sha>)",
 	)
 	cmd.PersistentFlags().StringVar(
 		&o.Since, "since", "",
@@ -131,8 +130,7 @@ func (o *sourceOptions) AddFlags(cmd *cobra.Command) {
 	)
 	cmd.PersistentFlags().BoolVar(
 		&o.Official, "official", false,
-		"require the attestation to be signed by the official SLSA "+
-			"source-actions workflow identity (implies --require-signatures)",
+		"require the attestation to be signed by the official SLSA Source identity",
 	)
 	cmd.PersistentFlags().BoolVarP(
 		&o.Verbose, "verbose", "v", false,
