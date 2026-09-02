@@ -142,8 +142,11 @@ func TestBuilderBinding(t *testing.T) {
 			verification: nil, want: slsa.StatusSkipped, wantMessage: "no verified signature",
 		},
 		{
-			name: "signature did not verify", fixture: "gha-generic-v02-tag.intoto.json",
-			verification: &sapi.Verification{Signature: &sapi.SignatureVerification{Verified: false, Status: sapi.VerificationStatus_FAILED, Identities: []*sapi.Identity{githubIdentity(generatorSubject, "")}}},
+			// A FAILED signature refuses the whole run (see
+			// TestVerifySignatureConclusions); an UNVERIFIABLE one is
+			// present but proves nothing, so the binding skips.
+			name: "signature not verified", fixture: "gha-generic-v02-tag.intoto.json",
+			verification: &sapi.Verification{Signature: &sapi.SignatureVerification{Verified: false, Status: sapi.VerificationStatus_UNVERIFIABLE, Identities: []*sapi.Identity{githubIdentity(generatorSubject, "")}}},
 			want:         slsa.StatusSkipped,
 		},
 	} {
@@ -170,7 +173,8 @@ func TestBuilderBinding(t *testing.T) {
 				assert.Less(t, res.SLSALevel, 2, "a failed binding caps the level below L2")
 			}
 			if tc.verification == nil {
-				assert.Empty(t, res.Message, "an unsigned statement is not announced as unproven")
+				assert.NotContains(t, res.Message, "unproven", "an unsigned statement is not announced as unproven")
+				assert.Contains(t, res.Message, "content alone")
 			}
 		})
 	}
@@ -254,4 +258,52 @@ func TestBuilderBindingSkipsStatementsWithoutBuilder(t *testing.T) {
 	for _, cr := range res.CoreResults {
 		assert.NotEqual(t, slsa.BuilderBindingControlID, cr.ID)
 	}
+}
+
+// A refuted signature fails the run whether or not signatures are
+// required; unsigned and unverifiable statements verify content-only
+// with a notice saying so.
+func TestVerifySignatureConclusions(t *testing.T) {
+	t.Parallel()
+	v, err := slsa.New()
+	require.NoError(t, err)
+	params := []slsa.VerificationOption{
+		slsa.WithParam("expected_source", "git+https://example.com/repo"),
+		slsa.WithParam("trusted_builders", []string{"https://example.com/builder"}),
+	}
+
+	t.Run("refuted always fails", func(t *testing.T) {
+		t.Parallel()
+		stmt := &signedAs{Statement: loadFixture(t, "v1-build.intoto.json"), verification: &sapi.Verification{
+			Signature: &sapi.SignatureVerification{Verified: false, Status: sapi.VerificationStatus_FAILED, Error: "bad sig"},
+		}}
+		_, err := v.Verify(context.Background(), stmt, params...)
+		require.ErrorIs(t, err, slsa.ErrSignatureUnverified)
+		assert.Contains(t, err.Error(), "bad sig")
+	})
+	t.Run("unsigned verifies with a notice", func(t *testing.T) {
+		t.Parallel()
+		res, err := v.Verify(context.Background(), loadFixture(t, "v1-build.intoto.json"), params...)
+		require.NoError(t, err)
+		assert.Equal(t, slsa.StatusPass, res.Status)
+		assert.Contains(t, res.Message, "unsigned")
+		assert.Contains(t, res.Message, "content alone")
+	})
+	t.Run("unverifiable verifies with the reason", func(t *testing.T) {
+		t.Parallel()
+		stmt := &signedAs{Statement: loadFixture(t, "v1-build.intoto.json"), verification: &sapi.Verification{
+			Signature: &sapi.SignatureVerification{Verified: false, Status: sapi.VerificationStatus_UNVERIFIABLE, Error: "no keys"},
+		}}
+		res, err := v.Verify(context.Background(), stmt, params...)
+		require.NoError(t, err)
+		assert.Equal(t, slsa.StatusPass, res.Status)
+		assert.Contains(t, res.Message, "no keys")
+	})
+	t.Run("a verified statement gets no notice", func(t *testing.T) {
+		t.Parallel()
+		stmt := &signedAs{Statement: loadFixture(t, "v1-build.intoto.json"), verification: verifiedBy(googleIdentity("user@example.com"))}
+		res, err := v.Verify(context.Background(), stmt, params...)
+		require.NoError(t, err)
+		assert.NotContains(t, res.Message, "content alone")
+	})
 }

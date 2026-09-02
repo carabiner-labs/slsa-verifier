@@ -170,7 +170,6 @@ func TestVerifySignaturesNotRequired(t *testing.T) {
 		{name: "signed but verification failed", sigs: oneSig, ver: &fakeVerification{verified: false}},
 		{name: "signed and verified", sigs: oneSig, ver: &fakeVerification{verified: true}},
 		{name: "recorded UNVERIFIABLE", sigs: oneSig, ver: recorded(sapi.VerificationStatus_UNVERIFIABLE, "no keys")},
-		{name: "recorded FAILED", sigs: oneSig, ver: recorded(sapi.VerificationStatus_FAILED, "bad sig")},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -179,6 +178,18 @@ func TestVerifySignaturesNotRequired(t *testing.T) {
 			err := New().VerifySignatures(env, SignatureOptions{Required: false})
 			assert.NoError(t, err)
 		})
+	}
+}
+
+// A refuted signature fails whether or not signatures are required:
+// unsigned means no claim of integrity, refuted means a false one.
+func TestVerifySignaturesRefutedAlwaysFails(t *testing.T) {
+	t.Parallel()
+	for _, required := range []bool{false, true} {
+		env := newSignedEnv(oneSig, recorded(sapi.VerificationStatus_FAILED, "bad sig"), nil)
+		err := New().VerifySignatures(env, SignatureOptions{Required: required})
+		require.ErrorIs(t, err, ErrSignatureUnverified)
+		assert.Contains(t, err.Error(), "bad sig")
 	}
 }
 

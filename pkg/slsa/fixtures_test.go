@@ -633,7 +633,7 @@ func TestVerifyV1FixtureSubjects(t *testing.T) {
 	require.Len(t, res.Subjects, 1)
 	assert.True(t, res.Subjects[0].Matched)
 	assert.Equal(t, "out/binary", res.Subjects[0].Subject.GetName())
-	assert.Empty(t, res.Message)
+	assert.NotContains(t, res.Message, "subjects not found")
 
 	// One artifact the attestation is not about fails the run, and the
 	// per-subject outcomes are all still reported.
@@ -643,7 +643,7 @@ func TestVerifyV1FixtureSubjects(t *testing.T) {
 	require.Len(t, res.Subjects, 2)
 	assert.True(t, res.Subjects[0].Matched)
 	assert.False(t, res.Subjects[1].Matched)
-	assert.Equal(t, "1 of 2 expected subjects not found in the attestation", res.Message)
+	assert.Contains(t, res.Message, "1 of 2 expected subjects not found in the attestation")
 	assert.Equal(t, baseline.SLSALevel, res.SLSALevel, "the controls still ran and the level is still computed")
 }
 

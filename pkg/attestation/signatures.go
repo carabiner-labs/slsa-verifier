@@ -102,6 +102,12 @@ func (*Verifier) VerifySignatures(env Envelope, opts SignatureOptions) error {
 	if err := env.Verify(verifyArgs...); err != nil {
 		return fmt.Errorf("verifying envelope signatures: %w", err)
 	}
+	// A signature that was checked and refuted always fails, required
+	// or not: unsigned means no claim of integrity, refuted means a
+	// claim of integrity that is false.
+	if status, reason := recordedStatus(env.GetVerification()); status == sapi.VerificationStatus_FAILED {
+		return withReason(ErrSignatureUnverified, reason)
+	}
 	if !opts.Required {
 		return nil
 	}

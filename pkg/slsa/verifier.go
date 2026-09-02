@@ -13,6 +13,7 @@ import (
 	"maps"
 
 	"github.com/carabiner-dev/attestation"
+	sapi "github.com/carabiner-dev/signer/api/v1"
 
 	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/builders"
 	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/controls"
@@ -127,6 +128,11 @@ func (v *Verifier) Verify(ctx context.Context, statement attestation.Statement, 
 	if binding != nil && binding.Status == StatusSkipped && len(verifiedSigners(statement)) > 0 {
 		notice = binding.Message
 	}
+	// So is a run with no verified signature: without it, a PASS speaks
+	// only for the document's content.
+	if !vopts.RequireSignatures {
+		notice = joinMessages(contentOnlyNotice(statement), notice)
+	}
 
 	// Layer 5: select and run buildType controls (optional).
 	var buildTypeResults []*ControlResult
@@ -172,6 +178,27 @@ func (v *Verifier) Verify(ctx context.Context, statement attestation.Statement, 
 		}
 	}
 	return result, nil
+}
+
+// contentOnlyNotice says a statement was evaluated without a verified
+// signature — unsigned, or signed but unverifiable — and why. Empty for
+// statements whose signature verified.
+func contentOnlyNotice(statement attestation.Statement) string {
+	v := statement.GetVerification()
+	if v != nil && v.GetVerified() {
+		return ""
+	}
+	sv, ok := v.(interface {
+		GetSignature() *sapi.SignatureVerification
+	})
+	if ok && sv.GetSignature() != nil && sv.GetSignature().GetStatus() == sapi.VerificationStatus_UNVERIFIABLE {
+		reason := sv.GetSignature().GetError()
+		if reason != "" {
+			return "signature not verified (" + reason + "): evaluated on content alone"
+		}
+		return "signature not verified: evaluated on content alone"
+	}
+	return "the statement is unsigned: evaluated on content alone"
 }
 
 // subjectsMessage summarizes which expected subjects the statement is

@@ -29,6 +29,12 @@ var ErrNotImplemented = errors.New("slsa: not implemented")
 // non-empty ExpectedSigners list).
 var ErrSignatureRequired = errors.New("slsa: statement is not signed or signature did not verify")
 
+// ErrSignatureUnverified is returned by VerifySignatures — whether or
+// not signatures are required — when the statement's signature was
+// checked and did not verify: unsigned means no claim of integrity,
+// refuted means a claim of integrity that is false.
+var ErrSignatureUnverified = errors.New("slsa: statement signature did not verify")
+
 // ErrIdentityMismatch is returned by CheckIdentities when the statement
 // is signed and verified but no expected signer matches the verified
 // identities.
@@ -111,6 +117,14 @@ func newDefaultImplementation() (*defaultImplementation, error) {
 // statement must carry a verified signature; otherwise the layer is a
 // pass-through that allows both signed and unsigned input.
 func (*defaultImplementation) VerifySignatures(_ context.Context, opts *VerificationOptions, statement attestation.Statement) error {
+	// A signature that was checked and refuted always fails, required
+	// or not.
+	if refuted, reason := refutedSignature(statement); refuted {
+		if reason != "" {
+			return fmt.Errorf("%w: %s", ErrSignatureUnverified, reason)
+		}
+		return ErrSignatureUnverified
+	}
 	if !opts.RequireSignatures {
 		return nil
 	}
@@ -127,6 +141,21 @@ func (*defaultImplementation) VerifySignatures(_ context.Context, opts *Verifica
 		return ErrSignatureRequired
 	}
 	return nil
+}
+
+// refutedSignature reports whether the statement's recorded signature
+// verification concluded FAILED, with the recorded reason.
+func refutedSignature(statement attestation.Statement) (refuted bool, reason string) {
+	sv, ok := statement.GetVerification().(interface {
+		GetSignature() *sapi.SignatureVerification
+	})
+	if !ok || sv.GetSignature() == nil {
+		return false, ""
+	}
+	if sv.GetSignature().GetStatus() != sapi.VerificationStatus_FAILED {
+		return false, ""
+	}
+	return true, sv.GetSignature().GetError()
 }
 
 // CheckIdentities matches the verified signer identities recorded on the
