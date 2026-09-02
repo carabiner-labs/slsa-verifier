@@ -10,6 +10,7 @@ import (
 	cdattestation "github.com/carabiner-dev/attestation"
 	sapi "github.com/carabiner-dev/signer/api/v1"
 	"github.com/carabiner-dev/signer/key"
+	signeroptions "github.com/carabiner-dev/signer/options"
 )
 
 // ErrSignatureRequired is returned by VerifySignatures when the
@@ -44,6 +45,17 @@ type SignatureOptions struct {
 	// signatures on the envelope. Sigstore bundles verify against an
 	// embedded trust root regardless and do not require entries here.
 	Keys []key.PublicKeyProvider
+
+	// RekorVerification enables verifying keyless DSSE envelopes — ones
+	// carrying a Sigstore certificate on their signatures — against the
+	// Rekor transparency log at RekorURL (the signer's default instance
+	// when empty). An unreachable log records the envelope as
+	// unverifiable rather than failing the call.
+	RekorVerification bool
+
+	// RekorURL is the transparency log to query; empty means the
+	// signer's default.
+	RekorURL string
 
 	// Required, when true, makes VerifySignatures return
 	// ErrSignatureRequired if the envelope carries zero signatures,
@@ -80,7 +92,14 @@ func (*Verifier) VerifySignatures(env Envelope, opts SignatureOptions) error {
 	if env == nil {
 		return errors.New("nil envelope")
 	}
-	if err := env.Verify(opts.Keys); err != nil {
+	verifyArgs := []any{opts.Keys}
+	if opts.RekorVerification {
+		verifyArgs = append(verifyArgs,
+			signeroptions.WithRekorVerification(true),
+			signeroptions.WithRekorURL(opts.RekorURL),
+		)
+	}
+	if err := env.Verify(verifyArgs...); err != nil {
 		return fmt.Errorf("verifying envelope signatures: %w", err)
 	}
 	if !opts.Required {

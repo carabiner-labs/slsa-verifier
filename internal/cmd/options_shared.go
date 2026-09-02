@@ -7,6 +7,7 @@ import (
 	"errors"
 
 	"github.com/carabiner-dev/command/keys"
+	signeroptions "github.com/carabiner-dev/signer/options"
 	"github.com/spf13/cobra"
 )
 
@@ -29,6 +30,11 @@ type sharedOptions struct {
 	// attestation is bound to subjects. On by default;
 	// --git-digest-aliases=false requires the exact algorithm names.
 	GitDigestAliases bool
+
+	// RekorURL is the transparency log queried to verify keyless DSSE
+	// envelopes (--rekor-url). The lookup itself is always on; an
+	// unreachable log leaves such envelopes unverifiable.
+	RekorURL string
 }
 
 func (so *sharedOptions) AddFlags(cmd *cobra.Command) {
@@ -37,6 +43,11 @@ func (so *sharedOptions) AddFlags(cmd *cobra.Command) {
 	cmd.PersistentFlags().BoolVar(
 		&so.RequireSignatures, "require-signatures", false,
 		"fail verification if the statement is unsigned or its signature did not verify",
+	)
+	cmd.PersistentFlags().StringVar(
+		&so.RekorURL, "rekor-url", signeroptions.DefaultRekorURL,
+		"transparency log for verifying keyless DSSE envelopes; looked up by default, "+
+			"an unreachable log leaves them unverifiable",
 	)
 	cmd.PersistentFlags().BoolVar(
 		&so.GitDigestAliases, "git-digest-aliases", true,

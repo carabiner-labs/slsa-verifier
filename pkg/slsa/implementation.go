@@ -116,6 +116,14 @@ func (*defaultImplementation) VerifySignatures(_ context.Context, opts *Verifica
 	}
 	v := statement.GetVerification()
 	if v == nil || !v.GetVerified() {
+		// Surface the reason the verification recorded, when there is
+		// one: "could not reach the transparency log" reads very
+		// differently from "signature did not verify".
+		if sv, ok := v.(interface {
+			GetSignature() *sapi.SignatureVerification
+		}); ok && sv.GetSignature().GetError() != "" {
+			return fmt.Errorf("%w: %s", ErrSignatureRequired, sv.GetSignature().GetError())
+		}
 		return ErrSignatureRequired
 	}
 	return nil

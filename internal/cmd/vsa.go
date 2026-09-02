@@ -288,8 +288,10 @@ func runVSA(cmd *cobra.Command, opts *vsaOptions) error {
 		return err
 	}
 	if err := v.VerifySignatures(env, attestation.SignatureOptions{
-		Keys:     keys,
-		Required: opts.shared.RequireSignatures,
+		Keys:              keys,
+		RekorVerification: true,
+		RekorURL:          opts.shared.RekorURL,
+		Required:          opts.shared.RequireSignatures,
 	}); err != nil {
 		switch {
 		case errors.Is(err, attestation.ErrSignatureRequired), errors.Is(err, attestation.ErrSignatureUnverified):

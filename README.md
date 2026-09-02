@@ -29,7 +29,12 @@ key material; making a result *trustworthy* requires opting in.
   signature could not be checked, is evaluated on its content alone. With
   it, the statement must carry a signature that verified: a missing one
   fails the run, and a signed statement with nothing to verify it against
-  (no `--key` for a DSSE envelope) is an error rather than a pass.
+  (no `--key` for a key-signed DSSE envelope) is an error rather than a
+  pass. Legacy keyless envelopes — DSSE signed with a Sigstore
+  certificate, as the slsa-github-generator publishes — are verified
+  against the Rekor transparency log by default (`--rekor-url` names the
+  instance); with no network they stay uncheckable and the run degrades
+  as above.
 - **Who signed is not checked unless you say who you expect.** A verified
   signature proves the content is intact, not that the right party produced
   it. Use `--signer <spec>` (`build`, `vsa`), `--official` (`source`, the
