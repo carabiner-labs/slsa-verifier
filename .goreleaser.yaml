@@ -46,8 +46,8 @@ checksum:
 
 release:
   github:
-    owner: carabiner-labs
-    name: slsa-verifier
+    owner: slsa-framework
+    name: verifier
   prerelease: auto
 
 changelog:
