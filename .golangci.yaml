@@ -168,9 +168,8 @@ linters:
         - typeUnparen
         - unnamedResult
         - unnecessaryBlock
-    gomoddirectives:
-      # Allow local replace directives. 
-      # replace-local: true
+    # gomoddirectives runs with its defaults (no replace directives
+    # allowed); to allow local ones, set replace-local: true here.
     gosec:
       excludes:
         - G304
