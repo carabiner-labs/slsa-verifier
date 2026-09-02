@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/types/known/structpb"
 
-	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/eval"
+	"github.com/slsa-framework/verifier/pkg/slsa/eval"
 )
 
 func TestRepoMatches(t *testing.T) {

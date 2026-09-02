@@ -16,10 +16,10 @@ import (
 	intoto "github.com/in-toto/attestation/go/v1"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/builders"
-	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/controls"
-	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/eval"
-	"github.com/carabiner-labs/slsa-verifier/pkg/subject"
+	"github.com/slsa-framework/verifier/pkg/slsa/builders"
+	"github.com/slsa-framework/verifier/pkg/slsa/controls"
+	"github.com/slsa-framework/verifier/pkg/slsa/eval"
+	"github.com/slsa-framework/verifier/pkg/subject"
 )
 
 var ErrNotImplemented = errors.New("slsa: not implemented")

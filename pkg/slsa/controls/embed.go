@@ -16,7 +16,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/eval"
+	"github.com/slsa-framework/verifier/pkg/slsa/eval"
 )
 
 //go:embed catalog

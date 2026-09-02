@@ -12,7 +12,7 @@ import (
 	"github.com/carabiner-dev/attestation"
 	"github.com/spf13/cobra"
 
-	"github.com/carabiner-labs/slsa-verifier/pkg/subject"
+	"github.com/slsa-framework/verifier/pkg/subject"
 )
 
 // subjectOptions binds a verification to the artifacts the user holds:

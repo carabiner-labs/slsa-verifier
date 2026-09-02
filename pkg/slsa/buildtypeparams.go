@@ -12,8 +12,8 @@ import (
 
 	"github.com/carabiner-dev/attestation"
 
-	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/controls"
-	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/eval"
+	"github.com/slsa-framework/verifier/pkg/slsa/controls"
+	"github.com/slsa-framework/verifier/pkg/slsa/eval"
 )
 
 // ErrBuildTypeParamsUnset is returned by Verify when the catalog has

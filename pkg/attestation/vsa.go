@@ -11,9 +11,9 @@ import (
 
 	sapi "github.com/carabiner-dev/signer/api/v1"
 
-	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/verifiers"
-	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/vsa"
-	"github.com/carabiner-labs/slsa-verifier/pkg/subject"
+	"github.com/slsa-framework/verifier/pkg/slsa/verifiers"
+	"github.com/slsa-framework/verifier/pkg/slsa/vsa"
+	"github.com/slsa-framework/verifier/pkg/subject"
 )
 
 // ErrVerifierUnbound is returned by VerifyVSA when an accepted verifier

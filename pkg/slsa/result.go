@@ -3,7 +3,7 @@
 
 package slsa
 
-import "github.com/carabiner-labs/slsa-verifier/pkg/subject"
+import "github.com/slsa-framework/verifier/pkg/subject"
 
 // Status enumerates the high-level outcome of a verification or a single control.
 type Status string

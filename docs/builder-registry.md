@@ -188,8 +188,8 @@ verifies and the header says the builder is unproven; the
 
 ```go
 import (
-    "github.com/carabiner-labs/slsa-verifier/pkg/slsa"
-    "github.com/carabiner-labs/slsa-verifier/pkg/slsa/builders"
+    "github.com/slsa-framework/verifier/pkg/slsa"
+    "github.com/slsa-framework/verifier/pkg/slsa/builders"
 )
 
 reg, err := builders.LoadEmbedded()          // or builders.Load("ci/builders.yaml")

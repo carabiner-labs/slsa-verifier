@@ -13,8 +13,8 @@ import (
 	"github.com/carabiner-dev/attestation"
 	"github.com/fatih/color"
 
-	"github.com/carabiner-labs/slsa-verifier/pkg/slsa"
-	"github.com/carabiner-labs/slsa-verifier/pkg/subject"
+	"github.com/slsa-framework/verifier/pkg/slsa"
+	"github.com/slsa-framework/verifier/pkg/subject"
 )
 
 // printResult writes the full verification roster: a top-line PASS/FAIL +

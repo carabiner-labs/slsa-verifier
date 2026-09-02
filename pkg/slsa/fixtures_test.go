@@ -20,10 +20,10 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/carabiner-labs/slsa-verifier/pkg/slsa"
-	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/eval"
-	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/vsa"
-	"github.com/carabiner-labs/slsa-verifier/pkg/subject"
+	"github.com/slsa-framework/verifier/pkg/slsa"
+	"github.com/slsa-framework/verifier/pkg/slsa/eval"
+	"github.com/slsa-framework/verifier/pkg/slsa/vsa"
+	"github.com/slsa-framework/verifier/pkg/subject"
 )
 
 // loadFixture parses a fixture through the public collector envelope

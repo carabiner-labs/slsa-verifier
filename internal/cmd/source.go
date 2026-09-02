@@ -15,10 +15,10 @@ import (
 	intoto "github.com/in-toto/attestation/go/v1"
 	"github.com/spf13/cobra"
 
-	"github.com/carabiner-labs/slsa-verifier/pkg/attestation"
-	"github.com/carabiner-labs/slsa-verifier/pkg/slsa"
-	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/controls"
-	"github.com/carabiner-labs/slsa-verifier/pkg/subject"
+	"github.com/slsa-framework/verifier/pkg/attestation"
+	"github.com/slsa-framework/verifier/pkg/slsa"
+	"github.com/slsa-framework/verifier/pkg/slsa/controls"
+	"github.com/slsa-framework/verifier/pkg/subject"
 )
 
 // officialSourceIssuer and officialSourceSANs identify the official

@@ -12,7 +12,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/carabiner-labs/slsa-verifier/pkg/subject"
+	"github.com/slsa-framework/verifier/pkg/subject"
 )
 
 // ErrNoApplicableAttestation is returned by Select when none of the

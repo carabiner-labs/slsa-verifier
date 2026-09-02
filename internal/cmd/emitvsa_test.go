@@ -14,8 +14,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/carabiner-labs/slsa-verifier/pkg/slsa"
-	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/controls"
+	"github.com/slsa-framework/verifier/pkg/slsa"
+	"github.com/slsa-framework/verifier/pkg/slsa/controls"
 )
 
 // emittedVSA runs emitVSA over the source fixture with the given result

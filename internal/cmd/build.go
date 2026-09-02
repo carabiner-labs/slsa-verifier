@@ -13,9 +13,9 @@ import (
 	signeroptions "github.com/carabiner-dev/signer/options"
 	"github.com/spf13/cobra"
 
-	"github.com/carabiner-labs/slsa-verifier/pkg/attestation"
-	"github.com/carabiner-labs/slsa-verifier/pkg/slsa"
-	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/controls"
+	"github.com/slsa-framework/verifier/pkg/attestation"
+	"github.com/slsa-framework/verifier/pkg/slsa"
+	"github.com/slsa-framework/verifier/pkg/slsa/controls"
 )
 
 // buildOptions composes every OptionsSet needed by the build command.

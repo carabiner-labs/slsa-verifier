@@ -6,10 +6,10 @@ import (
 	"sync"
 
 	"github.com/carabiner-dev/attestation"
-	"github.com/carabiner-labs/slsa-verifier/pkg/slsa"
-	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/builders"
-	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/controls"
-	"github.com/carabiner-labs/slsa-verifier/pkg/subject"
+	"github.com/slsa-framework/verifier/pkg/slsa"
+	"github.com/slsa-framework/verifier/pkg/slsa/builders"
+	"github.com/slsa-framework/verifier/pkg/slsa/controls"
+	"github.com/slsa-framework/verifier/pkg/subject"
 )
 
 type FakeVerifierImplementation struct {

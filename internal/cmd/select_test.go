@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/carabiner-labs/slsa-verifier/pkg/attestation"
+	"github.com/slsa-framework/verifier/pkg/attestation"
 )
 
 // testdata/source-note.jsonl is a commit's git note as sourcetool

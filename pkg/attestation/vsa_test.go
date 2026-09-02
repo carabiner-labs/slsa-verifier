@@ -15,8 +15,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/vsa"
-	"github.com/carabiner-labs/slsa-verifier/pkg/subject"
+	"github.com/slsa-framework/verifier/pkg/slsa/vsa"
+	"github.com/slsa-framework/verifier/pkg/subject"
 )
 
 // fakePredicate is a minimal attestation.Predicate for unit tests —

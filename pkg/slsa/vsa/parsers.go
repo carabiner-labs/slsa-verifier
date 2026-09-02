@@ -17,7 +17,7 @@ import (
 	// Force pkg/slsa/predicate's init() to run before ours so it
 	// finishes replacing collectorpred.Parsers with the SLSA-only
 	// registry, and our additions below survive.
-	_ "github.com/carabiner-labs/slsa-verifier/pkg/slsa/predicate"
+	_ "github.com/slsa-framework/verifier/pkg/slsa/predicate"
 )
 
 // v02Parser parses VSA v0.2 payloads through encoding/json into a

@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/controls"
+	"github.com/slsa-framework/verifier/pkg/slsa/controls"
 )
 
 func TestPartitionBuildTypeControls(t *testing.T) {

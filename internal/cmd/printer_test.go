@@ -11,7 +11,7 @@ import (
 	"github.com/fatih/color"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/carabiner-labs/slsa-verifier/pkg/slsa"
+	"github.com/slsa-framework/verifier/pkg/slsa"
 )
 
 // withNoColor pins color.NoColor=true so tests get the deterministic

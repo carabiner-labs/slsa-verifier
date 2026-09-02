@@ -10,8 +10,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/controls"
-	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/eval"
+	"github.com/slsa-framework/verifier/pkg/slsa/controls"
+	"github.com/slsa-framework/verifier/pkg/slsa/eval"
 )
 
 // multiTrackCatalog returns a synthetic Catalog where the v1 build

@@ -15,8 +15,8 @@ import (
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 
-	"github.com/carabiner-labs/slsa-verifier/pkg/attestation"
-	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/verifiers"
+	"github.com/slsa-framework/verifier/pkg/attestation"
+	"github.com/slsa-framework/verifier/pkg/slsa/verifiers"
 )
 
 // vsaOptions composes the flags specific to the vsa subcommand. The

@@ -9,9 +9,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/carabiner-labs/slsa-verifier/pkg/attestation"
-	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/eval"
-	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/vsa"
+	"github.com/slsa-framework/verifier/pkg/attestation"
+	"github.com/slsa-framework/verifier/pkg/slsa/eval"
+	"github.com/slsa-framework/verifier/pkg/slsa/vsa"
 )
 
 // Predicate types each subcommand verifies, used to pick the right

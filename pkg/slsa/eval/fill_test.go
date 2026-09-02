@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
 
-	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/eval"
+	"github.com/slsa-framework/verifier/pkg/slsa/eval"
 )
 
 func TestFillNilMessagesAllocatesSubMessages(t *testing.T) {

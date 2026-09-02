@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/builders"
+	"github.com/slsa-framework/verifier/pkg/slsa/builders"
 )
 
 const (

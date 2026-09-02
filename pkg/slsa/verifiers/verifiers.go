@@ -15,7 +15,7 @@ import (
 
 	sapi "github.com/carabiner-dev/signer/api/v1"
 
-	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/builders"
+	"github.com/slsa-framework/verifier/pkg/slsa/builders"
 )
 
 // Verifier describes a VSA issuer and the identity that signs the VSAs

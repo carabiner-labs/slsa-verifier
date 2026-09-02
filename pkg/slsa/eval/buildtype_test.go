@@ -12,7 +12,7 @@ import (
 	sourceprovenance "github.com/slsa-framework/source-tool/pkg/provenance"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/eval"
+	"github.com/slsa-framework/verifier/pkg/slsa/eval"
 )
 
 func TestBuildTypeOfV1(t *testing.T) {

@@ -9,7 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/builders"
+	"github.com/slsa-framework/verifier/pkg/slsa/builders"
 )
 
 // builderOptions holds the flags that bind builders to the identities

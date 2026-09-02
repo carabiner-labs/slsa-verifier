@@ -15,10 +15,10 @@ import (
 	"github.com/carabiner-dev/attestation"
 	sapi "github.com/carabiner-dev/signer/api/v1"
 
-	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/builders"
-	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/controls"
-	_ "github.com/carabiner-labs/slsa-verifier/pkg/slsa/predicate" // registers the SLSA-only predicate parsers
-	"github.com/carabiner-labs/slsa-verifier/pkg/subject"
+	"github.com/slsa-framework/verifier/pkg/slsa/builders"
+	"github.com/slsa-framework/verifier/pkg/slsa/controls"
+	_ "github.com/slsa-framework/verifier/pkg/slsa/predicate" // registers the SLSA-only predicate parsers
+	"github.com/slsa-framework/verifier/pkg/subject"
 )
 
 // Verifier is the SLSA attestation verifier. It orchestrates the layered

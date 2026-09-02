@@ -1,4 +1,4 @@
-module github.com/carabiner-labs/slsa-verifier
+module github.com/slsa-framework/verifier
 
 go 1.26
 

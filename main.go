@@ -4,7 +4,7 @@
 package main
 
 import (
-	"github.com/carabiner-labs/slsa-verifier/internal/cmd"
+	"github.com/slsa-framework/verifier/internal/cmd"
 )
 
 func main() {

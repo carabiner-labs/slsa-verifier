@@ -11,10 +11,10 @@ import (
 	cdattestation "github.com/carabiner-dev/attestation"
 	intoto "github.com/in-toto/attestation/go/v1"
 
-	"github.com/carabiner-labs/slsa-verifier/pkg/slsa"
-	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/controls"
-	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/vsa"
-	"github.com/carabiner-labs/slsa-verifier/pkg/subject"
+	"github.com/slsa-framework/verifier/pkg/slsa"
+	"github.com/slsa-framework/verifier/pkg/slsa/controls"
+	"github.com/slsa-framework/verifier/pkg/slsa/vsa"
+	"github.com/slsa-framework/verifier/pkg/subject"
 )
 
 // emitVSA writes an unsigned VSA v1 statement describing result to w. The

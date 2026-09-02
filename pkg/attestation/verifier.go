@@ -10,8 +10,8 @@ import (
 	// parsers on top. Both happen as side effects of these blank
 	// imports, so a Verifier built with New() has the right parsers
 	// wired up out of the box.
-	_ "github.com/carabiner-labs/slsa-verifier/pkg/slsa/predicate"
-	_ "github.com/carabiner-labs/slsa-verifier/pkg/slsa/vsa"
+	_ "github.com/slsa-framework/verifier/pkg/slsa/predicate"
+	_ "github.com/slsa-framework/verifier/pkg/slsa/vsa"
 )
 
 // Verifier orchestrates attestation verification. Methods on the

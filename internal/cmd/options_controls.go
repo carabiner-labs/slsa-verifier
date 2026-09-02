@@ -9,7 +9,7 @@ import (
 	"github.com/carabiner-dev/command"
 	"github.com/spf13/cobra"
 
-	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/controls"
+	"github.com/slsa-framework/verifier/pkg/slsa/controls"
 )
 
 var _ command.OptionsSet = &controlsOptions{}

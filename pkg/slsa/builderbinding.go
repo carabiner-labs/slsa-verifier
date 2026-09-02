@@ -11,8 +11,8 @@ import (
 	"github.com/carabiner-dev/attestation"
 	sapi "github.com/carabiner-dev/signer/api/v1"
 
-	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/builders"
-	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/eval"
+	"github.com/slsa-framework/verifier/pkg/slsa/builders"
+	"github.com/slsa-framework/verifier/pkg/slsa/eval"
 )
 
 // BuilderBindingControlID identifies the core result of binding the

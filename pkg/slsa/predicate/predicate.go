@@ -22,7 +22,7 @@ import (
 	"github.com/carabiner-dev/collector/predicate/generic"
 	"google.golang.org/protobuf/encoding/protojson"
 
-	"github.com/carabiner-labs/slsa-verifier/pkg/slsa/eval"
+	"github.com/slsa-framework/verifier/pkg/slsa/eval"
 )
 
 // Parser handles a single SLSA predicate type by unmarshalling JSON into
